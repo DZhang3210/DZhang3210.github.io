@@ -1,0 +1,94 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 520" font-family="Helvetica, Arial, sans-serif" font-size="13">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#555"/>
+    </marker>
+    <style>
+      .box{fill:#f4f6f8;stroke:#8a96a3;stroke-width:1.2}
+      .in{fill:#e8f0fb;stroke:#5b84c4;stroke-width:1.2}
+      .meet{fill:#fde9d4;stroke:#d9822b;stroke-width:1.8}
+      .out{fill:#e9f5ea;stroke:#4f9a58;stroke-width:1.2}
+      .t{fill:#222;text-anchor:middle}
+      .s{fill:#666;text-anchor:middle;font-size:11px}
+      .h{fill:#111;text-anchor:middle;font-size:16px;font-weight:bold}
+      .l{stroke:#555;stroke-width:1.3;fill:none;marker-end:url(#arr)}
+      .sep{stroke:#ccc;stroke-width:1;stroke-dasharray:4 4}
+    </style>
+  </defs>
+  <rect width="960" height="520" fill="#ffffff"/>
+
+  <line class="sep" x1="320" y1="20" x2="320" y2="470"/>
+  <line class="sep" x1="640" y1="20" x2="640" y2="470"/>
+
+  <!-- ===== Panel 1: Bi-encoder ===== -->
+  <text class="h" x="160" y="36">(a) Bi-encoder</text>
+  <text class="s" x="160" y="54">siamese BiLSTM, DistilBERT</text>
+
+  <rect class="in" x="40" y="74" width="100" height="34" rx="5"/><text class="t" x="90" y="96">Address A</text>
+  <rect class="in" x="180" y="74" width="100" height="34" rx="5"/><text class="t" x="230" y="96">Address B</text>
+  <path class="l" d="M90,108 V136"/><path class="l" d="M230,108 V136"/>
+
+  <rect class="box" x="40" y="138" width="100" height="44" rx="5"/><text class="t" x="90" y="158">Encoder</text><text class="s" x="90" y="173">BiLSTM / BERT</text>
+  <rect class="box" x="180" y="138" width="100" height="44" rx="5"/><text class="t" x="230" y="158">Encoder</text><text class="s" x="230" y="173">same weights</text>
+  <path d="M140,160 H180" stroke="#8a96a3" stroke-dasharray="3 3"/>
+  <path class="l" d="M90,182 V210"/><path class="l" d="M230,182 V210"/>
+
+  <rect class="box" x="40" y="212" width="100" height="34" rx="5"/><text class="t" x="90" y="234">mean pool → u</text>
+  <rect class="box" x="180" y="212" width="100" height="34" rx="5"/><text class="t" x="230" y="234">mean pool → v</text>
+  <path class="l" d="M90,246 V300 H118"/><path class="l" d="M230,246 V300 H202"/>
+
+  <rect class="meet" x="120" y="282" width="80" height="38" rx="5"/><text class="t" x="160" y="306">[|u−v|; u⊙v]</text>
+  <path class="l" d="M160,320 V386"/>
+  <rect class="out" x="110" y="388" width="100" height="34" rx="5"/><text class="t" x="160" y="410">P(match)</text>
+  <text class="s" x="160" y="440">A and B meet only here,</text>
+  <text class="s" x="160" y="455">as two finished vectors</text>
+
+  <!-- ===== Panel 2: ESIM ===== -->
+  <text class="h" x="480" y="36">(b) ESIM</text>
+  <text class="s" x="480" y="54">word2vec + BiLSTM + attention</text>
+
+  <rect class="in" x="360" y="74" width="100" height="34" rx="5"/><text class="t" x="410" y="96">Address A</text>
+  <rect class="in" x="500" y="74" width="100" height="34" rx="5"/><text class="t" x="550" y="96">Address B</text>
+  <path class="l" d="M410,108 V136"/><path class="l" d="M550,108 V136"/>
+
+  <rect class="box" x="360" y="138" width="100" height="44" rx="5"/><text class="t" x="410" y="158">BiLSTM</text><text class="s" x="410" y="173">per-word vectors</text>
+  <rect class="box" x="500" y="138" width="100" height="44" rx="5"/><text class="t" x="550" y="158">BiLSTM</text><text class="s" x="550" y="173">per-word vectors</text>
+  <path class="l" d="M410,182 V210"/><path class="l" d="M550,182 V210"/>
+
+  <rect class="meet" x="360" y="212" width="240" height="44" rx="5"/><text class="t" x="480" y="232">Attention: align words</text><text class="s" x="480" y="247">each word of A ↔ the words of B</text>
+  <path class="l" d="M410,256 V276"/><path class="l" d="M550,256 V276"/>
+  <rect class="box" x="360" y="278" width="100" height="40" rx="5"/><text class="t" x="410" y="296">Compose</text><text class="s" x="410" y="310">BiLSTM, A side</text>
+  <rect class="box" x="500" y="278" width="100" height="40" rx="5"/><text class="t" x="550" y="296">Compose</text><text class="s" x="550" y="310">BiLSTM, B side</text>
+  <path class="l" d="M410,318 V330"/><path class="l" d="M550,318 V330"/>
+  <rect class="box" x="360" y="332" width="100" height="28" rx="5"/><text class="t" x="410" y="351">pool → v_a</text>
+  <rect class="box" x="500" y="332" width="100" height="28" rx="5"/><text class="t" x="550" y="351">pool → v_b</text>
+  <path class="l" d="M410,360 V376 H438"/><path class="l" d="M550,360 V376 H522"/>
+  <rect class="box" x="440" y="364" width="80" height="24" rx="5"/><text class="t" x="480" y="381">MLP</text>
+  <path class="l" d="M480,388 V398"/>
+  <rect class="out" x="430" y="400" width="100" height="30" rx="5"/><text class="t" x="480" y="420">P(match)</text>
+  <text class="s" x="480" y="448">two paths to the end, but each carries</text>
+  <text class="s" x="480" y="463">the other address after alignment</text>
+
+  <!-- ===== Panel 3: Cross-encoder ===== -->
+  <text class="h" x="800" y="36">(c) Cross-encoder</text>
+  <text class="s" x="800" y="54">DistilBERT cross-encoder</text>
+
+  <rect class="in" x="670" y="74" width="260" height="34" rx="5"/><text class="t" x="800" y="96">[CLS] Address A [SEP] Address B [SEP]</text>
+  <path class="l" d="M800,108 V136"/>
+
+  <rect class="meet" x="700" y="138" width="200" height="108" rx="5"/>
+  <text class="t" x="800" y="182">DistilBERT</text>
+  <text class="s" x="800" y="200">self-attention over the joined row:</text>
+  <text class="s" x="800" y="214">every token sees A and B</text>
+  <path class="l" d="M800,246 V284"/>
+  <rect class="box" x="720" y="286" width="160" height="34" rx="5"/><text class="t" x="800" y="308">mean + max pool</text>
+  <path class="l" d="M800,320 V336"/>
+  <rect class="box" x="720" y="338" width="160" height="28" rx="5"/><text class="t" x="800" y="357">MLP</text>
+  <path class="l" d="M800,366 V386"/>
+  <rect class="out" x="750" y="388" width="100" height="34" rx="5"/><text class="t" x="800" y="410">P(match)</text>
+  <text class="s" x="800" y="440">A and B meet from the first layer</text>
+
+  <!-- legend -->
+  <rect class="meet" x="330" y="488" width="16" height="12" rx="2"/>
+  <text x="352" y="499" fill="#444" font-size="12">= where A and B first interact</text>
+</svg>

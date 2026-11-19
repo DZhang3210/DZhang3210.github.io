@@ -1,0 +1,301 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Same place or not? What breaks address-matching models</title>
+<meta name="description" content="I compared tree models and four neural networks on real address pairs, scored by the kind of mistake. They all handle the easy cases. They come apart on one specific thing: a missing house number.">
+<link rel="stylesheet" href="../../assets/style.css">
+</head>
+<body>
+<header class="site"><div class="wrap"><a class="name" href="../../">David Zhang</a>
+<nav><a href="../../">Writing</a><a href="https://github.com/DZhang3210">GitHub</a></nav></div></header>
+<main><div class="wrap">
+<article><h1>Same place or not? What breaks address-matching models</h1><div class="meta">November 2026 · 7 min read</div><p class="lede">Is <code>12 ELM ST</code> the same place as <code>12 ELM STREET</code>? Obviously. What about <code>431 HALLETT ST</code> and <code>431 HARRIET ST</code>? Probably not, but a model that only looks at how similar the letters are will say yes. And what about <code>74 BEACH RD</code> and <code>BEACH RD</code>?</p>
+
+<p>That last one turned out to be the most interesting question in this whole project.</p>
+<p>This post walks through what I built and what I found. The full write-up, with every table, is <a href="https://github.com/DZhang3210/address-matching-by-pair-type/blob/main/paper/address-matching-by-pair-type.pdf">the paper (PDF)</a>, and the code, trained models and dataset are all public (links at the end).</p>
+<h2>The problem</h2>
+<p>Geocoding means turning an address into a point on a map. Somewhere in that process there&rsquo;s a step where you have an address someone typed and a list of candidate addresses from a reference database, usually the ones in the same ZIP code. You have to decide which candidate, if any, is the same place. That final yes/no comparison is <strong>address matching</strong>, and it&rsquo;s what this project is about.</p>
+<p>There&rsquo;s a fair amount of work on it, from hand-tuned string-similarity rules to deep learning. Lin et al. (2020), for example, report an F1 of 0.97 with a neural model on Chinese addresses. But I kept running into the same issue when reading these papers: <strong>every paper evaluates on its own data, with one headline number.</strong> You can&rsquo;t compare them, and a single number hides <em>which</em> mistakes a model makes. A model can score 98% accuracy while failing badly at the one case you actually care about, because the easy cases swamp the average.</p>
+<p>So I set out to put very different kinds of models on the same pairs and score them by the <em>type</em> of pair.</p>
+<h2>The data</h2>
+<p>I used two open datasets that describe the same real-world places: <a href="https://overturemaps.org/">Overture Maps</a> and <a href="https://opensource.foursquare.com/os-places/">Foursquare Open Source Places</a>. Overture publishes &ldquo;bridge files&rdquo; that say which Foursquare record each Overture place was matched to. So for every matched place in Connecticut I get two versions of its address, written by two different sources. That&rsquo;s a positive pair, labelled &ldquo;same place&rdquo;.</p>
+<p>A bit of cleaning was needed first. I matched at the <strong>building level</strong>, so suite and floor numbers get stripped (<code>7 BACKUS AVE STE 101</code> becomes <code>7 BACKUS AVE</code>). That creates lots of duplicates: one mall address appeared 77 times. I kept one copy of each, leaving 28,834 true matches.</p>
+<p>Then the negatives, the pairs that are <em>not</em> the same place. Random pairs are too easy, so I built several kinds:</p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>Pair type</th>
+<th>Example</th>
+<th>Same place?</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Identical match</td>
+<td><code>7 BACKUS AVE</code> / <code>7 BACKUS AVE</code></td>
+<td>yes</td>
+</tr>
+<tr>
+<td>Non-identical match</td>
+<td><code>12 ELM ST</code> / <code>12 ELM STREET</code></td>
+<td>yes</td>
+</tr>
+<tr>
+<td>Case 1: same street, other number</td>
+<td><code>12 ELM ST</code> / <code>14 ELM ST</code></td>
+<td>no</td>
+</tr>
+<tr>
+<td>Case 2s: look-alike street</td>
+<td><code>431 HALLETT ST</code> / <code>431 HARRIET ST</code></td>
+<td>no</td>
+</tr>
+<tr>
+<td>Case 3: random</td>
+<td>two random addresses</td>
+<td>no</td>
+</tr>
+</tbody>
+</table></div>
+<p>The look-alike streets (case 2s) were the hard part to get. Real examples are rare: only 15 in my whole test set. So I made them: take a real address, keep its house number, and swap in a <em>different</em> real street from the same ZIP code whose name looks similar. The non-identical matches and the look-alike streets are the two hard pair types. Every model gets the easy ones right, so they&rsquo;re where the models differ.</p>
+<p>Two more design choices mattered. There are nine non-matches for every match, which mimics a model having to reject many wrong candidates. And the train/validation/test split is <strong>by ZIP code</strong>: whole neighbourhoods go to one split, so the test set contains only areas no model has seen.</p>
+<h2>The models</h2>
+<p>I compared two very different approaches.</p>
+<p><strong>Classical models</strong> get the address pre-chopped into pieces: house number, street and ZIP code. For each piece I compute string-similarity scores (Jaro-Winkler, Levenshtein, character-overlap measures and so on), 23 features in total, and train logistic regression, a random forest and XGBoost on them.</p>
+<p><strong>Neural models</strong> get only the two raw strings and have to figure out the rest:</p>
+<ul>
+<li>a <strong>siamese BiLSTM</strong>, which reads each address character by character, squashes it into one vector, and compares the two vectors at the very end;</li>
+<li><strong>ESIM</strong>, which reads word by word and lets each word of one address &ldquo;attend&rdquo; to the words of the other partway through;</li>
+<li><strong>DistilBERT as a bi-encoder</strong>, a pretrained transformer used like the siamese model: encode each address separately, compare at the end;</li>
+<li><strong>DistilBERT as a cross-encoder</strong>, where both addresses go in as <em>one</em> input, so every token can look at every token of the other address from the first layer.</li>
+</ul>
+<figure><img src="../../assets/figures/model-setups.svg" alt="Diagram of the three neural set-ups: bi-encoder, ESIM, cross-encoder"><figcaption>The neural set-ups differ in where the two addresses first meet (orange).</figcaption></figure>
+
+<h2>How I scored them</h2>
+<p>Two kinds of numbers:</p>
+<ol>
+<li><strong>Per pair type at a 0.5 threshold</strong>: what share of true matches did the model find, and what share of each kind of non-match did it reject?</li>
+<li><strong>AUC</strong>, which ignores the threshold. Take a random true (non-identical) match and a random look-alike-street fake. What&rsquo;s the chance the model gives the true match the higher score? 0.5 is a coin flip; 1.0 is perfect.</li>
+</ol>
+<p>The second one turned out to be essential. Two models can look very different at 0.5 just because their scores are shifted, while ranking the pairs equally well.</p>
+<figure class="chart"><figcaption><strong>One number per model</strong><span>Chance that a random true (non-identical) match scores above a random look-alike-street fake. Test set; neural ranges span three seeds.</span></figcaption><div class="svg-scroll"><svg viewBox="0 0 680 202" role="img" aria-label="Overall AUC per model">
+<line class="grid" x1="200.0" y1="12" x2="200.0" y2="166"/>
+<text class="tick" x="200.0" y="182" text-anchor="middle">0.8</text>
+<line class="grid" x1="276.7" y1="12" x2="276.7" y2="166"/>
+<text class="tick" x="276.7" y="182" text-anchor="middle">0.82</text>
+<line class="grid" x1="353.3" y1="12" x2="353.3" y2="166"/>
+<text class="tick" x="353.3" y="182" text-anchor="middle">0.84</text>
+<line class="grid" x1="430.0" y1="12" x2="430.0" y2="166"/>
+<text class="tick" x="430.0" y="182" text-anchor="middle">0.86</text>
+<line class="grid" x1="506.7" y1="12" x2="506.7" y2="166"/>
+<text class="tick" x="506.7" y="182" text-anchor="middle">0.88</text>
+<line class="grid" x1="583.3" y1="12" x2="583.3" y2="166"/>
+<text class="tick" x="583.3" y="182" text-anchor="middle">0.9</text>
+<line class="grid" x1="660.0" y1="12" x2="660.0" y2="166"/>
+<text class="tick" x="660.0" y="182" text-anchor="middle">0.92</text>
+<text class="label" x="190" y="32" text-anchor="end">Random forest / XGBoost</text>
+<g class="mark"><title>Random forest / XGBoost: AUC 0.902</title>
+<circle class="dot s1" cx="591.0" cy="28" r="5"/>
+<circle class="dot s1" cx="591.0" cy="28" r="5"/>
+<rect class="hit" x="583.0" y="18" width="16.0" height="20"/>
+</g>
+<text class="label" x="190" y="62" text-anchor="end">DistilBERT cross-encoder</text>
+<g class="mark"><title>DistilBERT cross-encoder: AUC 0.877–0.888</title>
+<line class="range s1" x1="495.2" y1="58" x2="537.3" y2="58"/>
+<circle class="dot s1" cx="495.2" cy="58" r="5"/>
+<circle class="dot s1" cx="537.3" cy="58" r="5"/>
+<rect class="hit" x="487.2" y="48" width="58.2" height="20"/>
+</g>
+<text class="label" x="190" y="92" text-anchor="end">Siamese BiLSTM</text>
+<g class="mark"><title>Siamese BiLSTM: AUC 0.854</title>
+<circle class="dot s1" cx="407.0" cy="88" r="5"/>
+<circle class="dot s1" cx="407.0" cy="88" r="5"/>
+<rect class="hit" x="399.0" y="78" width="16.0" height="20"/>
+</g>
+<text class="label" x="190" y="122" text-anchor="end">DistilBERT bi-encoder</text>
+<g class="mark"><title>DistilBERT bi-encoder: AUC 0.836–0.845</title>
+<line class="range s1" x1="338.0" y1="118" x2="372.5" y2="118"/>
+<circle class="dot s1" cx="338.0" cy="118" r="5"/>
+<circle class="dot s1" cx="372.5" cy="118" r="5"/>
+<rect class="hit" x="330.0" y="108" width="50.5" height="20"/>
+</g>
+<text class="label" x="190" y="152" text-anchor="end">ESIM</text>
+<g class="mark"><title>ESIM: AUC 0.815–0.842</title>
+<line class="range s1" x1="257.5" y1="148" x2="361.0" y2="148"/>
+<circle class="dot s1" cx="257.5" cy="148" r="5"/>
+<circle class="dot s1" cx="361.0" cy="148" r="5"/>
+<rect class="hit" x="249.5" y="138" width="119.5" height="20"/>
+</g>
+<text class="tick" x="430" y="200" text-anchor="middle">AUC: non-identical matches vs look-alike streets (axis starts at 0.80)</text>
+</svg></div><details class="table-view"><summary>Show as a table</summary><table><tr><th>Model</th><th>AUC</th></tr><tr><td>Random forest / XGBoost</td><td>0.902</td></tr><tr><td>DistilBERT cross-encoder</td><td>0.877–0.888</td></tr><tr><td>Siamese BiLSTM</td><td>0.854</td></tr><tr><td>DistilBERT bi-encoder</td><td>0.836–0.845</td></tr><tr><td>ESIM</td><td>0.815–0.842</td></tr></table></details></figure>
+<h2>What I found</h2>
+<p><strong>1. Everyone handles the easy stuff.</strong> Identical matches, a different house number on the same street, random pairs: every model gets about 98–100% of these right. If I&rsquo;d reported overall accuracy, the models would look nearly identical.</p>
+<p><strong>2. The 0.5 threshold is misleading on its own.</strong> The DistilBERT bi-encoder finds 82–84% of the non-identical matches but rejects only 58–63% of the look-alike streets. The cross-encoder is the opposite: 70–73% found, 82–93% rejected. They look like completely different models. But their ranking ability (AUC) is much closer, and the gap between them has a very specific source.</p>
+<p><strong>3. That source is the house number.</strong> Here&rsquo;s the key chart. It splits the true matches by what happened to the house number, and asks how well each model ranks them above the look-alike fakes:</p>
+<figure class="chart"><figcaption><strong>Where the models differ: the house number</strong><span>How well each model ranks true non-identical matches above look-alike-street fakes, split by what happened to the house number. Test set; bars span three seeds.</span></figcaption><div class="legend"><span><i class="sw s1"></i>Random forest</span><span><i class="sw s2"></i>Cross-encoder</span><span><i class="sw s3"></i>Bi-encoder</span><span><i class="sw s4"></i>ESIM</span></div><div class="svg-scroll"><svg viewBox="0 0 680 446" role="img" aria-label="AUC of true matches against look-alike streets, by house-number group">
+<text class="group" x="0" y="20">Same house number on both sides <tspan class="muted">(638 matches)</tspan></text>
+<line class="grid" x1="190.0" y1="24" x2="190.0" y2="110"/>
+<line class="chance" x1="268.3" y1="24" x2="268.3" y2="110"/>
+<line class="grid" x1="346.7" y1="24" x2="346.7" y2="110"/>
+<line class="grid" x1="425.0" y1="24" x2="425.0" y2="110"/>
+<line class="grid" x1="503.3" y1="24" x2="503.3" y2="110"/>
+<line class="grid" x1="581.7" y1="24" x2="581.7" y2="110"/>
+<line class="grid" x1="660.0" y1="24" x2="660.0" y2="110"/>
+<text class="label" x="180" y="38" text-anchor="end">Random forest</text>
+<g class="mark"><title>Random forest, same house number on both sides: AUC 0.923 (1 run)</title>
+<circle class="dot s1" cx="599.7" cy="34" r="5"/>
+<circle class="dot s1" cx="599.7" cy="34" r="5"/>
+<rect class="hit" x="591.7" y="24" width="16.0" height="20"/>
+</g>
+<text class="label" x="180" y="60" text-anchor="end">Cross-encoder</text>
+<g class="mark"><title>Cross-encoder, same house number on both sides: AUC 0.922–0.927 (3 seeds, min–max)</title>
+<line class="range s2" x1="598.9" y1="56" x2="602.8" y2="56"/>
+<circle class="dot s2" cx="598.9" cy="56" r="5"/>
+<circle class="dot s2" cx="602.8" cy="56" r="5"/>
+<rect class="hit" x="590.9" y="46" width="19.9" height="20"/>
+</g>
+<text class="label" x="180" y="82" text-anchor="end">Bi-encoder</text>
+<g class="mark"><title>Bi-encoder, same house number on both sides: AUC 0.925–0.934 (3 seeds, min–max)</title>
+<line class="range s3" x1="601.2" y1="78" x2="608.3" y2="78"/>
+<circle class="dot s3" cx="601.2" cy="78" r="5"/>
+<circle class="dot s3" cx="608.3" cy="78" r="5"/>
+<rect class="hit" x="593.2" y="68" width="23.1" height="20"/>
+</g>
+<text class="label" x="180" y="104" text-anchor="end">ESIM</text>
+<g class="mark"><title>ESIM, same house number on both sides: AUC 0.880–0.906 (3 seeds, min–max)</title>
+<line class="range s4" x1="566.0" y1="100" x2="586.4" y2="100"/>
+<circle class="dot s4" cx="566.0" cy="100" r="5"/>
+<circle class="dot s4" cx="586.4" cy="100" r="5"/>
+<rect class="hit" x="558.0" y="90" width="36.4" height="20"/>
+</g>
+<text class="group" x="0" y="156">House number missing on one side <tspan class="muted">(164 matches)</tspan></text>
+<line class="grid" x1="190.0" y1="160" x2="190.0" y2="246"/>
+<line class="chance" x1="268.3" y1="160" x2="268.3" y2="246"/>
+<line class="grid" x1="346.7" y1="160" x2="346.7" y2="246"/>
+<line class="grid" x1="425.0" y1="160" x2="425.0" y2="246"/>
+<line class="grid" x1="503.3" y1="160" x2="503.3" y2="246"/>
+<line class="grid" x1="581.7" y1="160" x2="581.7" y2="246"/>
+<line class="grid" x1="660.0" y1="160" x2="660.0" y2="246"/>
+<text class="label" x="180" y="174" text-anchor="end">Random forest</text>
+<g class="mark"><title>Random forest, house number missing on one side: AUC 0.845 (1 run)</title>
+<circle class="dot s1" cx="538.6" cy="170" r="5"/>
+<circle class="dot s1" cx="538.6" cy="170" r="5"/>
+<rect class="hit" x="530.6" y="160" width="16.0" height="20"/>
+</g>
+<text class="label" x="180" y="196" text-anchor="end">Cross-encoder</text>
+<g class="mark"><title>Cross-encoder, house number missing on one side: AUC 0.689–0.729 (3 seeds, min–max)</title>
+<line class="range s2" x1="416.4" y1="192" x2="447.7" y2="192"/>
+<circle class="dot s2" cx="416.4" cy="192" r="5"/>
+<circle class="dot s2" cx="447.7" cy="192" r="5"/>
+<rect class="hit" x="408.4" y="182" width="47.3" height="20"/>
+</g>
+<text class="label" x="180" y="218" text-anchor="end">Bi-encoder</text>
+<g class="mark"><title>Bi-encoder, house number missing on one side: AUC 0.448–0.497 (3 seeds, min–max)</title>
+<line class="range s3" x1="227.6" y1="214" x2="266.0" y2="214"/>
+<circle class="dot s3" cx="227.6" cy="214" r="5"/>
+<circle class="dot s3" cx="266.0" cy="214" r="5"/>
+<rect class="hit" x="219.6" y="204" width="54.4" height="20"/>
+</g>
+<text class="label" x="180" y="240" text-anchor="end">ESIM</text>
+<g class="mark"><title>ESIM, house number missing on one side: AUC 0.547–0.667 (3 seeds, min–max)</title>
+<line class="range s4" x1="305.2" y1="236" x2="399.2" y2="236"/>
+<circle class="dot s4" cx="305.2" cy="236" r="5"/>
+<circle class="dot s4" cx="399.2" cy="236" r="5"/>
+<rect class="hit" x="297.2" y="226" width="110.0" height="20"/>
+</g>
+<text class="group" x="0" y="292">Two different house numbers <tspan class="muted">(41 matches)</tspan></text>
+<line class="grid" x1="190.0" y1="296" x2="190.0" y2="382"/>
+<line class="chance" x1="268.3" y1="296" x2="268.3" y2="382"/>
+<line class="grid" x1="346.7" y1="296" x2="346.7" y2="382"/>
+<line class="grid" x1="425.0" y1="296" x2="425.0" y2="382"/>
+<line class="grid" x1="503.3" y1="296" x2="503.3" y2="382"/>
+<line class="grid" x1="581.7" y1="296" x2="581.7" y2="382"/>
+<line class="grid" x1="660.0" y1="296" x2="660.0" y2="382"/>
+<text class="label" x="180" y="310" text-anchor="end">Random forest</text>
+<g class="mark"><title>Random forest, two different house numbers: AUC 0.798 (1 run)</title>
+<circle class="dot s1" cx="501.8" cy="306" r="5"/>
+<circle class="dot s1" cx="501.8" cy="306" r="5"/>
+<rect class="hit" x="493.8" y="296" width="16.0" height="20"/>
+</g>
+<text class="label" x="180" y="332" text-anchor="end">Cross-encoder</text>
+<g class="mark"><title>Cross-encoder, two different house numbers: AUC 0.928–0.940 (3 seeds, min–max)</title>
+<line class="range s2" x1="603.6" y1="328" x2="613.0" y2="328"/>
+<circle class="dot s2" cx="603.6" cy="328" r="5"/>
+<circle class="dot s2" cx="613.0" cy="328" r="5"/>
+<rect class="hit" x="595.6" y="318" width="25.4" height="20"/>
+</g>
+<text class="label" x="180" y="354" text-anchor="end">Bi-encoder</text>
+<g class="mark"><title>Bi-encoder, two different house numbers: AUC 0.949–0.963 (3 seeds, min–max)</title>
+<line class="range s3" x1="620.0" y1="350" x2="631.0" y2="350"/>
+<circle class="dot s3" cx="620.0" cy="350" r="5"/>
+<circle class="dot s3" cx="631.0" cy="350" r="5"/>
+<rect class="hit" x="612.0" y="340" width="27.0" height="20"/>
+</g>
+<text class="label" x="180" y="376" text-anchor="end">ESIM</text>
+<g class="mark"><title>ESIM, two different house numbers: AUC 0.808–0.853 (3 seeds, min–max)</title>
+<line class="range s4" x1="509.6" y1="372" x2="544.9" y2="372"/>
+<circle class="dot s4" cx="509.6" cy="372" r="5"/>
+<circle class="dot s4" cx="544.9" cy="372" r="5"/>
+<rect class="hit" x="501.6" y="362" width="51.2" height="20"/>
+</g>
+<text class="tick" x="190.0" y="426" text-anchor="middle">0.4</text>
+<text class="tick" x="268.3" y="426" text-anchor="middle">0.5 (chance)</text>
+<text class="tick" x="346.7" y="426" text-anchor="middle">0.6</text>
+<text class="tick" x="425.0" y="426" text-anchor="middle">0.7</text>
+<text class="tick" x="503.3" y="426" text-anchor="middle">0.8</text>
+<text class="tick" x="581.7" y="426" text-anchor="middle">0.9</text>
+<text class="tick" x="660.0" y="426" text-anchor="middle">1</text>
+<text class="tick" x="425" y="444" text-anchor="middle">AUC: true matches vs look-alike streets (0.5 = coin flip)</text>
+</svg></div><details class="table-view"><summary>Show as a table</summary><table><tr><th>Group</th><th>n</th><th>Random forest</th><th>Cross-encoder</th><th>Bi-encoder</th><th>ESIM</th></tr><tr><td>Same house number on both sides</td><td>638</td><td>0.923</td><td>0.922–0.927</td><td>0.925–0.934</td><td>0.880–0.906</td></tr><tr><td>House number missing on one side</td><td>164</td><td>0.845</td><td>0.689–0.729</td><td>0.448–0.497</td><td>0.547–0.667</td></tr><tr><td>Two different house numbers</td><td>41</td><td>0.798</td><td>0.928–0.940</td><td>0.949–0.963</td><td>0.808–0.853</td></tr></table></details></figure>
+<ul>
+<li>When <strong>both sides have the same house number</strong>, every model except ESIM is around 0.92–0.93. The transformers are just as good as the random forest at telling a typo&rsquo;d street (<code>ELM STRET</code>) from a different street that looks alike.</li>
+<li>When the house number is <strong>missing from one side</strong> (<code>641 SCOFIELDTOWN RD</code> / <code>SCOFIELDTOWN RD</code>), everything falls apart for the neural models. The random forest still manages 0.85. The cross-encoder drops to about 0.7. The bi-encoder is <em>at or below chance</em>: it scores those real matches lower than the fake streets.</li>
+</ul>
+<p>So the transformers aren&rsquo;t worse at streets. The tree models&rsquo; overall lead comes from this one group of 164 pairs. That makes sense: the classical models get the house number as its own field, plus a flag that says &ldquo;one side has no number&rdquo;. The neural models just see a string with a number missing, and treat that as a big difference.</p>
+<p><strong>4. Part of that group can&rsquo;t be solved at all.</strong> Here&rsquo;s where <code>74 BEACH RD</code> / <code>BEACH RD</code> comes back. While building the case 1 negatives (same street, different number), I made a mistake: I checked that both places had a house number using their Overture addresses, but the pair actually uses the Foursquare address for one side, which sometimes leaves the number off. So 344 of the test non-matches look exactly like <code>74 BEACH RD</code> / <code>BEACH RD</code>: two genuinely different businesses on the same road, one without its number.</p>
+<p>Those pairs are labelled correctly (they really are different places), but they have the same text pattern as some true matches. No model can tell them apart from the text alone. Every model I scored is close to chance on them (AUC 0.50–0.64). Changing a model&rsquo;s design only moves errors from one side to the other:</p>
+<figure class="chart"><figcaption><strong>Same text, opposite labels</strong><span>Random forest on test pairs where exactly one address has a house number. Changing how the missing number is encoded moves errors from one row to the other.</span></figcaption><div class="legend"><span><i class="sw s1"></i>Sentinel: missing number marked “not comparable” (−1)</span><span><i class="sw s2"></i>Zero-fill: missing number read as 0</span></div><div class="svg-scroll"><svg viewBox="0 0 680 186" role="img" aria-label="Random forest on pairs with one house number missing: sentinel vs zero-fill">
+<line class="grid" x1="240.0" y1="10" x2="240.0" y2="146"/>
+<text class="tick" x="240.0" y="162" text-anchor="middle">0</text>
+<line class="grid" x1="335.0" y1="10" x2="335.0" y2="146"/>
+<text class="tick" x="335.0" y="162" text-anchor="middle">25</text>
+<line class="grid" x1="430.0" y1="10" x2="430.0" y2="146"/>
+<text class="tick" x="430.0" y="162" text-anchor="middle">50</text>
+<line class="grid" x1="525.0" y1="10" x2="525.0" y2="146"/>
+<text class="tick" x="525.0" y="162" text-anchor="middle">75</text>
+<line class="grid" x1="620.0" y1="10" x2="620.0" y2="146"/>
+<text class="tick" x="620.0" y="162" text-anchor="middle">100</text>
+<text class="label" x="230" y="36" text-anchor="end">True matches found</text>
+<text class="label muted" x="230" y="50" text-anchor="end">n = 164</text>
+<g class="mark"><title>Sentinel (−1): 27.4% (true matches found)</title><path class="bar s1" d="M240,16 H340.12 Q344.12,16 344.12,20 V30 Q344.12,34 340.12,34 H240 Z"/><text class="value" x="350.1" y="29">27.4%</text></g>
+<g class="mark"><title>Zero-fill (0): 11.6% (true matches found)</title><path class="bar s2" d="M240,38 H280.08 Q284.08,38 284.08,42 V52 Q284.08,56 280.08,56 H240 Z"/><text class="value" x="290.1" y="51">11.6%</text></g>
+<text class="label" x="230" y="102" text-anchor="end">Same-street non-matches rejected</text>
+<text class="label muted" x="230" y="116" text-anchor="end">n = 344</text>
+<g class="mark"><title>Sentinel (−1): 82.0% (same-street non-matches rejected)</title><path class="bar s1" d="M240,82 H547.5999999999999 Q551.5999999999999,82 551.5999999999999,86 V96 Q551.5999999999999,100 547.5999999999999,100 H240 Z"/><text class="value" x="557.6" y="95">82.0%</text></g>
+<g class="mark"><title>Zero-fill (0): 95.9% (same-street non-matches rejected)</title><path class="bar s2" d="M240,104 H600.4200000000001 Q604.4200000000001,104 604.4200000000001,108 V118 Q604.4200000000001,122 600.4200000000001,122 H240 Z"/><text class="value" x="610.4" y="117">95.9%</text></g>
+<text class="tick" x="430" y="184" text-anchor="middle">% correct</text>
+</svg></div><details class="table-view"><summary>Show as a table</summary><table><tr><th>Pairs with one number missing</th><th>n</th><th>Sentinel</th><th>Zero-fill</th></tr><tr><td>True matches found</td><td>164</td><td>27.4%</td><td>11.6%</td></tr><tr><td>Same-street non-matches rejected</td><td>344</td><td>82.0%</td><td>95.9%</td></tr></table></details></figure>
+<p>I kept the &ldquo;sentinel&rdquo; version: when one side simply lacks a number and everything else agrees, nothing in the text says these are different places, so leaning towards &ldquo;match&rdquo; seemed more defensible.</p>
+<h2>A detour: ESIM and the invisible house numbers</h2>
+<p>One fun bug-hunt. ESIM, following the original paper, uses word2vec vectors and drops words seen only once. House numbers are mostly seen once, so they all become the same &ldquo;unknown&rdquo; token. That makes <code>2147 SUMMER ST</code> / <code>1867 SUMMER ST</code> literally identical to the model, with the opposite label to <code>2147 SUMMER ST</code> / <code>2147 SUMMER ST</code>. Each training run just picked one answer for the whole group. Giving every rare word its own fixed random vector fixed it, because now the model can at least tell &ldquo;same token&rdquo; from &ldquo;different token&rdquo;. Characters (siamese) and sub-word pieces (DistilBERT) never had this problem.</p>
+<h2>What I&rsquo;d do next</h2>
+<ul>
+<li><strong>Give the neural models the house number separately</strong>, or at least a &ldquo;number missing&rdquo; signal, like the classical models have. The data says that&rsquo;s exactly where they lose.</li>
+<li><strong>Fix the case 1 construction</strong> so the ambiguous pairs aren&rsquo;t in the data at all.</li>
+<li><strong>Test it in a retrieval setting</strong>: real geocoding ranks many candidates, not one fixed pair.</li>
+<li><strong>Go beyond Connecticut.</strong></li>
+</ul>
+<p>The main lesson for me: <strong>score by the type of mistake.</strong> A single number would have said &ldquo;trees beat transformers&rdquo; and stopped there. Splitting by pair type showed the transformers handle streets just as well, and that the whole gap is one specific, fixable thing.</p>
+<h2>Everything is public</h2>
+<ul>
+<li><strong>Paper (PDF):</strong> <a href="https://github.com/DZhang3210/address-matching-by-pair-type/blob/main/paper/address-matching-by-pair-type.pdf">address-matching-by-pair-type.pdf</a></li>
+<li><strong>Code:</strong> <a href="https://github.com/DZhang3210/address-matching-by-pair-type">github.com/DZhang3210/address-matching-by-pair-type</a>, including a notebook that reproduces every table</li>
+<li><strong>Trained models:</strong> <a href="https://huggingface.co/zhangdav/address-matching-by-pair-type">huggingface.co/zhangdav/address-matching-by-pair-type</a></li>
+<li><strong>Dataset:</strong> <a href="https://huggingface.co/datasets/zhangdav/address-matching-by-pair-type">huggingface.co/datasets/zhangdav/address-matching-by-pair-type</a></li>
+</ul></article>
+</div></main>
+<footer class="site"><div class="wrap">David Zhang</div></footer>
+</body>
+</html>
