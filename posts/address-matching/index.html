@@ -11,14 +11,14 @@
 <header class="site"><div class="wrap"><a class="name" href="../../">David Zhang</a>
 <nav><a href="../../">Writing</a><a href="https://github.com/DZhang3210">GitHub</a></nav></div></header>
 <main><div class="wrap">
-<article><h1>Comparing address-matching models on a unified dataset</h1><div class="meta">November 2026 · 7 min read</div><p class="meta-link"><a href="https://github.com/DZhang3210/address-matching-by-pair-type/blob/main/paper/address-matching-by-pair-type.pdf">Full write-up (PDF)</a> · <a href="https://github.com/DZhang3210/address-matching-by-pair-type">Code</a></p>
+<article><h1>Comparing address-matching models on a unified dataset</h1><div class="meta">November 2026 · 9 min read</div><p class="meta-link"><a href="https://github.com/DZhang3210/address-matching-by-pair-type/blob/main/paper/address-matching-by-pair-type.pdf">Full write-up (PDF)</a> · <a href="https://github.com/DZhang3210/address-matching-by-pair-type">Code</a></p>
 
 <p>There are many address-matching models, from string-similarity rules to deep learning, but each is evaluated on its own data, so they can&rsquo;t be compared directly. This post runs seven of them on one shared dataset of real address pairs and reports where they differ.</p>
 <h2>The data</h2>
 <p>I used two open datasets, <a href="https://overturemaps.org/">Overture Maps</a> and <a href="https://opensource.foursquare.com/os-places/">Foursquare Open Source Places</a>. Overture&rsquo;s bridge files link each Overture place to its Foursquare record, which gives pairs of addresses for the same place written by two different sources (Connecticut only).</p>
 <figure><img src="../../assets/figures/data-pipeline.svg" alt="Data pipeline: two open datasets, linked with Overture's bridge files, cleaned, split by ZIP code, doubtful pairs set aside, duplicates removed, then non-matches added at 1:9"><figcaption>How the dataset is built. Details of each step are in the <a href="https://github.com/DZhang3210/address-matching-by-pair-type/blob/main/paper/address-matching-by-pair-type.pdf">full write-up</a>.</figcaption></figure>
 
-<p>Then the negatives, the pairs that are <em>not</em> the same place. Random pairs are too easy, so I built several kinds:</p>
+<p>Then the negatives, the pairs that are <em>not</em> the same place. Random pairs are too easy, so I built several kinds, listed below. The two hard pair types are the non-identical matches and the look-alike streets; the models differ only on these. The dataset has a 1:9 ratio of matches to non-matches, and to avoid data leakage, each ZIP code belongs to only one of the train, validation and test splits.</p>
 <div class="table-scroll"><table>
 <thead>
 <tr>
@@ -108,10 +108,7 @@
 </tr>
 </tbody>
 </table></div>
-<p>The two hard pair types are the non-identical matches and the look-alike streets; the models differ only on these.</p>
-<p>The dataset has a 1:9 ratio of matches to non-matches. To avoid data leakage, each ZIP code belongs to only one of the train, validation and test splits.</p>
 <h2>The models</h2>
-<p>I compared two kinds of models.</p>
 <p><strong>Classical models</strong> get the address pre-chopped into pieces: house number, street and ZIP code. For each piece I compute string-similarity scores (Jaro-Winkler, Levenshtein, character-overlap measures and so on), plus a flag for pairs where one side has no house number: 23 features in total. When one side has no number, its house-number features are set to −1, meaning &ldquo;not comparable&rdquo;. I train logistic regression, a random forest and XGBoost on these features. XGBoost is the tree model used in the comparisons below.</p>
 <figure><img src="../../assets/figures/classical-setup.svg" alt="Diagram of the classical set-up: two addresses are split into house number, street and ZIP, compared part by part into 23 similarity features, and passed to a classifier"><figcaption>The classical models: 23 similarity features comparing the two addresses part by part, then a classifier.</figcaption></figure>
 
@@ -126,300 +123,259 @@
 <figure><img src="../../assets/figures/model-setups.svg" alt="Diagram of the three neural set-ups: bi-encoder, ESIM, cross-encoder"><figcaption>The neural set-ups differ in where the two addresses first meet (orange).</figcaption></figure>
 
 <h2>How I scored them</h2>
-<p>Two kinds of numbers:</p>
-<ol>
-<li><strong>Per pair type at a 0.5 threshold</strong>: what share of true matches did the model find, and what share of each kind of non-match did it reject?</li>
-<li><strong>AUC</strong>, which ignores the threshold. Take a random true (non-identical) match and a random look-alike street. What&rsquo;s the chance the model gives the true match the higher score? 0.5 is a coin flip; 1.0 is perfect.</li>
-</ol>
-<p>AUC is needed because two models can look different at 0.5 only because their scores are shifted, while ranking the pairs equally well.</p>
-<figure class="chart"><figcaption><strong>One number per model</strong><span>Chance that a random true (non-identical) match scores above a random look-alike street. Test set; neural ranges span three seeds.</span></figcaption><div class="svg-scroll"><svg viewBox="0 0 680 202" role="img" aria-label="Overall AUC per model">
-<line class="grid" x1="200.0" y1="12" x2="200.0" y2="166"/>
-<text class="tick" x="200.0" y="182" text-anchor="middle">0.84</text>
-<line class="grid" x1="292.0" y1="12" x2="292.0" y2="166"/>
-<text class="tick" x="292.0" y="182" text-anchor="middle">0.86</text>
-<line class="grid" x1="384.0" y1="12" x2="384.0" y2="166"/>
-<text class="tick" x="384.0" y="182" text-anchor="middle">0.88</text>
-<line class="grid" x1="476.0" y1="12" x2="476.0" y2="166"/>
-<text class="tick" x="476.0" y="182" text-anchor="middle">0.9</text>
-<line class="grid" x1="568.0" y1="12" x2="568.0" y2="166"/>
-<text class="tick" x="568.0" y="182" text-anchor="middle">0.92</text>
-<line class="grid" x1="660.0" y1="12" x2="660.0" y2="166"/>
-<text class="tick" x="660.0" y="182" text-anchor="middle">0.94</text>
-<text class="label" x="190" y="32" text-anchor="end">XGBoost</text>
-<g class="mark"><title>XGBoost: AUC 0.920</title>
-<circle class="dot s1" cx="568.0" cy="28" r="5"/>
-<circle class="dot s1" cx="568.0" cy="28" r="5"/>
-<rect class="hit" x="560.0" y="18" width="16.0" height="20"/>
-</g>
-<text class="label" x="190" y="62" text-anchor="end">DistilBERT cross-encoder</text>
-<g class="mark"><title>DistilBERT cross-encoder: AUC 0.888–0.904</title>
-<line class="range s1" x1="420.8" y1="58" x2="494.4" y2="58"/>
-<circle class="dot s1" cx="420.8" cy="58" r="5"/>
-<circle class="dot s1" cx="494.4" cy="58" r="5"/>
-<rect class="hit" x="412.8" y="48" width="89.6" height="20"/>
-</g>
-<text class="label" x="190" y="92" text-anchor="end">DistilBERT bi-encoder</text>
-<g class="mark"><title>DistilBERT bi-encoder: AUC 0.883–0.893</title>
-<line class="range s1" x1="397.8" y1="88" x2="443.8" y2="88"/>
-<circle class="dot s1" cx="397.8" cy="88" r="5"/>
-<circle class="dot s1" cx="443.8" cy="88" r="5"/>
-<rect class="hit" x="389.8" y="78" width="62.0" height="20"/>
-</g>
-<text class="label" x="190" y="122" text-anchor="end">Siamese BiLSTM</text>
-<g class="mark"><title>Siamese BiLSTM: AUC 0.878–0.893</title>
-<line class="range s1" x1="374.8" y1="118" x2="443.8" y2="118"/>
-<circle class="dot s1" cx="374.8" cy="118" r="5"/>
-<circle class="dot s1" cx="443.8" cy="118" r="5"/>
-<rect class="hit" x="366.8" y="108" width="85.0" height="20"/>
-</g>
-<text class="label" x="190" y="152" text-anchor="end">ESIM (fastText)</text>
-<g class="mark"><title>ESIM (fastText): AUC 0.861–0.890</title>
-<line class="range s1" x1="296.6" y1="148" x2="430.0" y2="148"/>
-<circle class="dot s1" cx="296.6" cy="148" r="5"/>
-<circle class="dot s1" cx="430.0" cy="148" r="5"/>
-<rect class="hit" x="288.6" y="138" width="149.4" height="20"/>
-</g>
-<text class="tick" x="430" y="200" text-anchor="middle">AUC: non-identical matches vs look-alike streets (axis starts at 0.84)</text>
-</svg></div><details class="table-view"><summary>Show as a table</summary><table><tr><th>Model</th><th>AUC</th></tr><tr><td>XGBoost</td><td>0.920</td></tr><tr><td>DistilBERT cross-encoder</td><td>0.888–0.904</td></tr><tr><td>DistilBERT bi-encoder</td><td>0.883–0.893</td></tr><tr><td>Siamese BiLSTM</td><td>0.878–0.893</td></tr><tr><td>ESIM (fastText)</td><td>0.861–0.890</td></tr></table></details></figure>
+<p>Each model is scored separately on each pair type: the share of matches it finds, or of non-matches it rejects. Two columns (shaded) matter most:</p>
+<ul>
+<li><strong>Missing number found</strong>: the share of true matches where one side has no house number (164 pairs, part of the non-identical matches). This is the group where the models differ most.</li>
+<li><strong>AUC, non-identical vs look-alike</strong>: how well a model tells real but differently written matches from look-alike streets, independent of the threshold.</li>
+</ul>
+<div class="table-scroll"><table>
+<tr><th>Model</th><th>Identical found</th><th>Non-identical found</th><th class="key">Missing number found</th><th>Different number rejected</th><th>Look-alike street rejected</th><th>Random rejected</th><th class="key">AUC, non-identical vs look-alike</th></tr>
+<tr><td>Logistic regression</td><td>99.8</td><td>60.1</td><td class="key">76.2</td><td>99.9</td><td>77.7</td><td>100.0</td><td class="key">0.776</td></tr>
+<tr><td>Random forest</td><td>100.0</td><td>84.0</td><td class="key">96.3</td><td>100.0</td><td>88.4</td><td>99.9</td><td class="key">0.924</td></tr>
+<tr class="hl"><td>XGBoost</td><td>100.0</td><td>83.6</td><td class="key">94.5</td><td>100.0</td><td>87.0</td><td>99.9</td><td class="key">0.920</td></tr>
+<tr><td>Siamese BiLSTM</td><td>100</td><td>87.0–89.3</td><td class="key">69.5–75.6</td><td>99.9–100.0</td><td>69.8–73.1</td><td>99.5–99.8</td><td class="key">0.878–0.893</td></tr>
+<tr><td>ESIM (fastText)</td><td>100</td><td>87.3–90.3</td><td class="key">71.3–75.6</td><td>98.1–99.0</td><td>73.5–80.4</td><td>99.8–99.9</td><td class="key">0.861–0.890</td></tr>
+<tr><td>DistilBERT bi-encoder</td><td>100</td><td>89.0–90.9</td><td class="key">69.5–72.6</td><td>99.8–99.9</td><td>57.6–68.8</td><td>99.8–99.9</td><td class="key">0.883–0.893</td></tr>
+<tr class="hl"><td>DistilBERT cross-encoder</td><td>100</td><td>80.3–83.0</td><td class="key">63.4–66.5</td><td>99.9–100</td><td>86.1–88.8</td><td>99.9</td><td class="key">0.888–0.904</td></tr>
+</table></div>
+
+<p><em>Test set. Neural models: min–max over three seeds. Highlighted: XGBoost and the DistilBERT cross-encoder.</em></p>
 <h2>What I found</h2>
 <p><strong>1. All models handle the easy pairs.</strong> On identical matches, different-number pairs and random pairs, every model gets about 98–100% right. Overall accuracy would make the models look nearly identical.</p>
-<p><strong>2. Missing house numbers are where the models differ most.</strong> When one side of a true match has no house number (<code>641 SCOFIELDTOWN RD</code> / <code>SCOFIELDTOWN RD</code>), the tree models find 94–96% of these matches, more than of non-identical matches overall. The neural models find 63–76% of them, about 15 points below their overall rate:</p>
-<figure class="chart"><figcaption><strong>Matches with a missing house number</strong><span>Share of true matches found at 0.5: all non-identical matches, and the 164 where only one side has a house number. Test set; neural ranges span three seeds.</span></figcaption><div class="legend"><span><i class="sw s1"></i>All non-identical matches (843)</span><span><i class="sw s2"></i>House number on one side only (164)</span></div><div class="svg-scroll"><svg viewBox="0 0 680 232" role="img" aria-label="Share of matches found at 0.5, all non-identical vs house number missing on one side">
-<line class="grid" x1="200.0" y1="12" x2="200.0" y2="196"/>
-<text class="tick" x="200.0" y="212" text-anchor="middle">50</text>
-<line class="grid" x1="292.0" y1="12" x2="292.0" y2="196"/>
-<text class="tick" x="292.0" y="212" text-anchor="middle">60</text>
-<line class="grid" x1="384.0" y1="12" x2="384.0" y2="196"/>
-<text class="tick" x="384.0" y="212" text-anchor="middle">70</text>
-<line class="grid" x1="476.0" y1="12" x2="476.0" y2="196"/>
-<text class="tick" x="476.0" y="212" text-anchor="middle">80</text>
-<line class="grid" x1="568.0" y1="12" x2="568.0" y2="196"/>
-<text class="tick" x="568.0" y="212" text-anchor="middle">90</text>
-<line class="grid" x1="660.0" y1="12" x2="660.0" y2="196"/>
-<text class="tick" x="660.0" y="212" text-anchor="middle">100</text>
-<text class="label" x="190" y="32" text-anchor="end">Random forest</text>
-<g class="mark"><title>Random forest, all non-identical matches (843): 84.0% found</title>
-<circle class="dot s1" cx="512.8" cy="28" r="5"/>
-<circle class="dot s1" cx="512.8" cy="28" r="5"/>
-<rect class="hit" x="504.8" y="18" width="16.0" height="20"/>
+<p><strong>2. Missing house numbers are where the models differ most.</strong> When one side of a true match has no house number (<code>641 SCOFIELDTOWN RD</code> / <code>SCOFIELDTOWN RD</code>), the neural models find only 63–76% of these matches, about 15 points below their rate on non-identical matches overall. The tree models don&rsquo;t follow this pattern: they find 94–96% of them, more than of non-identical matches overall.</p>
+<p>The likely reason is that the tree models get the house number segmented ahead of time: they compare it as its own field, marked &ldquo;not comparable&rdquo; when one side has none, which makes this comparison simple. The neural models get no such segmentation; they see only a string with a number missing. The marking matters: with the missing number read as <code>0</code> instead, XGBoost finds only 20% of these matches.</p>
+<figure class="chart"><figcaption><strong>Matches with a missing house number</strong><span>Share of true matches found at 0.5: all non-identical matches, and the 164 where only one side has a house number. Test set; neural ranges span three seeds.</span></figcaption><div class="legend"><span><i class="sw s1"></i>All non-identical matches (843)</span><span><i class="sw s2"></i>House number on one side only (164)</span></div><div class="svg-scroll"><svg viewBox="0 0 680 310" role="img" aria-label="Matches with a missing house number">
+<text class="note" x="0" y="22" letter-spacing="0.08em">TREE MODELS</text>
+<line class="grid" x1="0" y1="30" x2="660" y2="30"/>
+<line class="grid" x1="200.0" y1="38" x2="200.0" y2="98"/>
+<line class="grid" x1="292.0" y1="38" x2="292.0" y2="98"/>
+<line class="grid" x1="384.0" y1="38" x2="384.0" y2="98"/>
+<line class="grid" x1="476.0" y1="38" x2="476.0" y2="98"/>
+<line class="grid" x1="568.0" y1="38" x2="568.0" y2="98"/>
+<line class="grid" x1="660.0" y1="38" x2="660.0" y2="98"/>
+<text class="label" x="190" y="57" text-anchor="end">Random forest</text>
+<g class="mark"><title>Random forest, All non-identical matches (843): 84.0%</title>
+<circle class="dot s1" cx="512.8" cy="53" r="5"/>
+<circle class="dot s1" cx="512.8" cy="53" r="5"/>
+<rect class="hit" x="504.8" y="43" width="16.0" height="20"/>
 </g>
-<g class="mark"><title>Random forest, house number on one side only (164): 96.3% found</title>
-<circle class="dot s2" cx="626.0" cy="28" r="5"/>
-<circle class="dot s2" cx="626.0" cy="28" r="5"/>
-<rect class="hit" x="618.0" y="18" width="16.0" height="20"/>
+<g class="mark"><title>Random forest, House number on one side only (164): 96.3%</title>
+<circle class="dot s2" cx="626.0" cy="53" r="5"/>
+<circle class="dot s2" cx="626.0" cy="53" r="5"/>
+<rect class="hit" x="618.0" y="43" width="16.0" height="20"/>
 </g>
-<text class="label" x="190" y="62" text-anchor="end">XGBoost</text>
-<g class="mark"><title>XGBoost, all non-identical matches (843): 83.6% found</title>
-<circle class="dot s1" cx="509.1" cy="58" r="5"/>
-<circle class="dot s1" cx="509.1" cy="58" r="5"/>
-<rect class="hit" x="501.1" y="48" width="16.0" height="20"/>
+<text class="label" x="190" y="87" text-anchor="end">XGBoost</text>
+<g class="mark"><title>XGBoost, All non-identical matches (843): 83.6%</title>
+<circle class="dot s1" cx="509.1" cy="83" r="5"/>
+<circle class="dot s1" cx="509.1" cy="83" r="5"/>
+<rect class="hit" x="501.1" y="73" width="16.0" height="20"/>
 </g>
-<g class="mark"><title>XGBoost, house number on one side only (164): 94.5% found</title>
-<circle class="dot s2" cx="609.4" cy="58" r="5"/>
-<circle class="dot s2" cx="609.4" cy="58" r="5"/>
-<rect class="hit" x="601.4" y="48" width="16.0" height="20"/>
+<g class="mark"><title>XGBoost, House number on one side only (164): 94.5%</title>
+<circle class="dot s2" cx="609.4" cy="83" r="5"/>
+<circle class="dot s2" cx="609.4" cy="83" r="5"/>
+<rect class="hit" x="601.4" y="73" width="16.0" height="20"/>
 </g>
-<text class="label" x="190" y="92" text-anchor="end">Siamese BiLSTM</text>
-<g class="mark"><title>Siamese BiLSTM, all non-identical matches (843): 87.0–89.3% found</title>
-<line class="range s1" x1="540.4" y1="88" x2="561.6" y2="88"/>
-<circle class="dot s1" cx="540.4" cy="88" r="5"/>
-<circle class="dot s1" cx="561.6" cy="88" r="5"/>
-<rect class="hit" x="532.4" y="78" width="37.2" height="20"/>
+<text class="note" x="0" y="130" letter-spacing="0.08em">NEURAL MODELS</text>
+<line class="grid" x1="0" y1="138" x2="660" y2="138"/>
+<line class="grid" x1="200.0" y1="146" x2="200.0" y2="266"/>
+<line class="grid" x1="292.0" y1="146" x2="292.0" y2="266"/>
+<line class="grid" x1="384.0" y1="146" x2="384.0" y2="266"/>
+<line class="grid" x1="476.0" y1="146" x2="476.0" y2="266"/>
+<line class="grid" x1="568.0" y1="146" x2="568.0" y2="266"/>
+<line class="grid" x1="660.0" y1="146" x2="660.0" y2="266"/>
+<text class="label" x="190" y="165" text-anchor="end">Siamese BiLSTM</text>
+<g class="mark"><title>Siamese BiLSTM, All non-identical matches (843): 87.0–89.3%</title>
+<line class="range s1" x1="540.4" y1="161" x2="561.6" y2="161"/>
+<circle class="dot s1" cx="540.4" cy="161" r="5"/>
+<circle class="dot s1" cx="561.6" cy="161" r="5"/>
+<rect class="hit" x="532.4" y="151" width="37.2" height="20"/>
 </g>
-<g class="mark"><title>Siamese BiLSTM, house number on one side only (164): 69.5–75.6% found</title>
-<line class="range s2" x1="379.4" y1="88" x2="435.5" y2="88"/>
-<circle class="dot s2" cx="379.4" cy="88" r="5"/>
-<circle class="dot s2" cx="435.5" cy="88" r="5"/>
-<rect class="hit" x="371.4" y="78" width="72.1" height="20"/>
+<g class="mark"><title>Siamese BiLSTM, House number on one side only (164): 69.5–75.6%</title>
+<line class="range s2" x1="379.4" y1="161" x2="435.5" y2="161"/>
+<circle class="dot s2" cx="379.4" cy="161" r="5"/>
+<circle class="dot s2" cx="435.5" cy="161" r="5"/>
+<rect class="hit" x="371.4" y="151" width="72.1" height="20"/>
 </g>
-<text class="label" x="190" y="122" text-anchor="end">ESIM (fastText)</text>
-<g class="mark"><title>ESIM (fastText), all non-identical matches (843): 87.3–90.3% found</title>
-<line class="range s1" x1="543.2" y1="118" x2="570.8" y2="118"/>
-<circle class="dot s1" cx="543.2" cy="118" r="5"/>
-<circle class="dot s1" cx="570.8" cy="118" r="5"/>
-<rect class="hit" x="535.2" y="108" width="43.6" height="20"/>
+<text class="label" x="190" y="195" text-anchor="end">ESIM (fastText)</text>
+<g class="mark"><title>ESIM (fastText), All non-identical matches (843): 87.3–90.3%</title>
+<line class="range s1" x1="543.2" y1="191" x2="570.8" y2="191"/>
+<circle class="dot s1" cx="543.2" cy="191" r="5"/>
+<circle class="dot s1" cx="570.8" cy="191" r="5"/>
+<rect class="hit" x="535.2" y="181" width="43.6" height="20"/>
 </g>
-<g class="mark"><title>ESIM (fastText), house number on one side only (164): 71.3–75.6% found</title>
-<line class="range s2" x1="396.0" y1="118" x2="435.5" y2="118"/>
-<circle class="dot s2" cx="396.0" cy="118" r="5"/>
-<circle class="dot s2" cx="435.5" cy="118" r="5"/>
-<rect class="hit" x="388.0" y="108" width="55.6" height="20"/>
+<g class="mark"><title>ESIM (fastText), House number on one side only (164): 71.3–75.6%</title>
+<line class="range s2" x1="396.0" y1="191" x2="435.5" y2="191"/>
+<circle class="dot s2" cx="396.0" cy="191" r="5"/>
+<circle class="dot s2" cx="435.5" cy="191" r="5"/>
+<rect class="hit" x="388.0" y="181" width="55.6" height="20"/>
 </g>
-<text class="label" x="190" y="152" text-anchor="end">DistilBERT bi-encoder</text>
-<g class="mark"><title>DistilBERT bi-encoder, all non-identical matches (843): 89.0–90.9% found</title>
-<line class="range s1" x1="558.8" y1="148" x2="576.3" y2="148"/>
-<circle class="dot s1" cx="558.8" cy="148" r="5"/>
-<circle class="dot s1" cx="576.3" cy="148" r="5"/>
-<rect class="hit" x="550.8" y="138" width="33.5" height="20"/>
+<text class="label" x="190" y="225" text-anchor="end">DistilBERT bi-encoder</text>
+<g class="mark"><title>DistilBERT bi-encoder, All non-identical matches (843): 89.0–90.9%</title>
+<line class="range s1" x1="558.8" y1="221" x2="576.3" y2="221"/>
+<circle class="dot s1" cx="558.8" cy="221" r="5"/>
+<circle class="dot s1" cx="576.3" cy="221" r="5"/>
+<rect class="hit" x="550.8" y="211" width="33.5" height="20"/>
 </g>
-<g class="mark"><title>DistilBERT bi-encoder, house number on one side only (164): 69.5–72.6% found</title>
-<line class="range s2" x1="379.4" y1="148" x2="407.9" y2="148"/>
-<circle class="dot s2" cx="379.4" cy="148" r="5"/>
-<circle class="dot s2" cx="407.9" cy="148" r="5"/>
-<rect class="hit" x="371.4" y="138" width="44.5" height="20"/>
+<g class="mark"><title>DistilBERT bi-encoder, House number on one side only (164): 69.5–72.6%</title>
+<line class="range s2" x1="379.4" y1="221" x2="407.9" y2="221"/>
+<circle class="dot s2" cx="379.4" cy="221" r="5"/>
+<circle class="dot s2" cx="407.9" cy="221" r="5"/>
+<rect class="hit" x="371.4" y="211" width="44.5" height="20"/>
 </g>
-<text class="label" x="190" y="182" text-anchor="end">DistilBERT cross-encoder</text>
-<g class="mark"><title>DistilBERT cross-encoder, all non-identical matches (843): 80.3–83.0% found</title>
-<line class="range s1" x1="478.8" y1="178" x2="503.6" y2="178"/>
-<circle class="dot s1" cx="478.8" cy="178" r="5"/>
-<circle class="dot s1" cx="503.6" cy="178" r="5"/>
-<rect class="hit" x="470.8" y="168" width="40.8" height="20"/>
+<text class="label" x="190" y="255" text-anchor="end">DistilBERT cross-encoder</text>
+<g class="mark"><title>DistilBERT cross-encoder, All non-identical matches (843): 80.3–83.0%</title>
+<line class="range s1" x1="478.8" y1="251" x2="503.6" y2="251"/>
+<circle class="dot s1" cx="478.8" cy="251" r="5"/>
+<circle class="dot s1" cx="503.6" cy="251" r="5"/>
+<rect class="hit" x="470.8" y="241" width="40.8" height="20"/>
 </g>
-<g class="mark"><title>DistilBERT cross-encoder, house number on one side only (164): 63.4–66.5% found</title>
-<line class="range s2" x1="323.3" y1="178" x2="351.8" y2="178"/>
-<circle class="dot s2" cx="323.3" cy="178" r="5"/>
-<circle class="dot s2" cx="351.8" cy="178" r="5"/>
-<rect class="hit" x="315.3" y="168" width="44.5" height="20"/>
+<g class="mark"><title>DistilBERT cross-encoder, House number on one side only (164): 63.4–66.5%</title>
+<line class="range s2" x1="323.3" y1="251" x2="351.8" y2="251"/>
+<circle class="dot s2" cx="323.3" cy="251" r="5"/>
+<circle class="dot s2" cx="351.8" cy="251" r="5"/>
+<rect class="hit" x="315.3" y="241" width="44.5" height="20"/>
 </g>
-<text class="tick" x="430" y="230" text-anchor="middle">% of matches found at the 0.5 threshold (axis starts at 50)</text>
+<text class="tick" x="200.0" y="292" text-anchor="middle">50</text>
+<text class="tick" x="292.0" y="292" text-anchor="middle">60</text>
+<text class="tick" x="384.0" y="292" text-anchor="middle">70</text>
+<text class="tick" x="476.0" y="292" text-anchor="middle">80</text>
+<text class="tick" x="568.0" y="292" text-anchor="middle">90</text>
+<text class="tick" x="660.0" y="292" text-anchor="middle">100</text>
+<text class="tick" x="430" y="308" text-anchor="middle">% of matches found at the 0.5 threshold (axis starts at 50)</text>
 </svg></div><details class="table-view"><summary>Show as a table</summary><table><tr><th>Model</th><th>All non-identical</th><th>Number on one side only</th></tr><tr><td>Random forest</td><td>84.0%</td><td>96.3%</td></tr><tr><td>XGBoost</td><td>83.6%</td><td>94.5%</td></tr><tr><td>Siamese BiLSTM</td><td>87.0–89.3%</td><td>69.5–75.6%</td></tr><tr><td>ESIM (fastText)</td><td>87.3–90.3%</td><td>71.3–75.6%</td></tr><tr><td>DistilBERT bi-encoder</td><td>89.0–90.9%</td><td>69.5–72.6%</td></tr><tr><td>DistilBERT cross-encoder</td><td>80.3–83.0%</td><td>63.4–66.5%</td></tr></table></details></figure>
-<p>The likely reason is that the classical models get the house number as its own field, marked &ldquo;not comparable&rdquo; when one side has none. Without that marking, the trees lose most of these matches: XGBoost with the missing number read as <code>0</code> finds 20% of them, against 94% with the −1 marking. The neural models see only a string with a number missing.</p>
-<p><strong>3. On look-alike streets the neural models are level with the trees.</strong> The chart splits the true matches by what happened to the house number, and shows how well each model ranks them above the look-alike streets:</p>
-<figure class="chart"><figcaption><strong>AUC by house-number group</strong><span>How well each model ranks true non-identical matches above look-alike streets, split by what happened to the house number. Test set; neural ranges span three seeds.</span></figcaption><div class="legend"><span><i class="sw s1"></i>XGBoost</span><span><i class="sw s5"></i>Siamese BiLSTM</span><span><i class="sw s4"></i>ESIM</span><span><i class="sw s3"></i>Bi-encoder</span><span><i class="sw s2"></i>Cross-encoder</span></div><div class="svg-scroll"><svg viewBox="0 0 680 512" role="img" aria-label="AUC of true matches against look-alike streets, by house-number group">
-<text class="group" x="0" y="20">Same house number on both sides <tspan class="muted">(638 matches)</tspan></text>
-<line class="chance" x1="190.0" y1="24" x2="190.0" y2="132"/>
-<line class="grid" x1="284.0" y1="24" x2="284.0" y2="132"/>
-<line class="grid" x1="378.0" y1="24" x2="378.0" y2="132"/>
-<line class="grid" x1="472.0" y1="24" x2="472.0" y2="132"/>
-<line class="grid" x1="566.0" y1="24" x2="566.0" y2="132"/>
-<line class="grid" x1="660.0" y1="24" x2="660.0" y2="132"/>
-<text class="label" x="180" y="38" text-anchor="end">XGBoost</text>
-<g class="mark"><title>XGBoost, same house number on both sides: AUC 0.919 (1 run)</title>
-<circle class="dot s1" cx="583.9" cy="34" r="5"/>
-<circle class="dot s1" cx="583.9" cy="34" r="5"/>
-<rect class="hit" x="575.9" y="24" width="16.0" height="20"/>
+<p><strong>3. On look-alike streets the neural models are level with the trees.</strong> With the missing-number matches set aside, every neural model ranks matches against look-alike streets about as well as XGBoost or better (AUC 0.89–0.94 against 0.91). XGBoost&rsquo;s overall lead comes from the 164 missing-number matches.</p>
+<figure class="chart"><figcaption><strong>Look-alike streets, with and without missing-number matches</strong><span>How well each model ranks true non-identical matches above look-alike streets: all of them, and without the 164 where one side has no house number. Test set; neural ranges span three seeds.</span></figcaption><div class="legend"><span><i class="sw s1"></i>All non-identical matches (843)</span><span><i class="sw s3"></i>Without missing-number matches (679)</span></div><div class="svg-scroll"><svg viewBox="0 0 680 280" role="img" aria-label="Look-alike streets, with and without missing-number matches">
+<text class="note" x="0" y="22" letter-spacing="0.08em">TREE MODELS</text>
+<line class="grid" x1="0" y1="30" x2="660" y2="30"/>
+<line class="grid" x1="200.0" y1="38" x2="200.0" y2="68"/>
+<line class="grid" x1="353.3" y1="38" x2="353.3" y2="68"/>
+<line class="grid" x1="506.7" y1="38" x2="506.7" y2="68"/>
+<line class="grid" x1="660.0" y1="38" x2="660.0" y2="68"/>
+<text class="label" x="190" y="57" text-anchor="end">XGBoost</text>
+<g class="mark"><title>XGBoost, All non-identical matches (843): 0.920</title>
+<circle class="dot s1" cx="506.7" cy="53" r="5"/>
+<circle class="dot s1" cx="506.7" cy="53" r="5"/>
+<rect class="hit" x="498.7" y="43" width="16.0" height="20"/>
 </g>
-<text class="label" x="180" y="60" text-anchor="end">Siamese BiLSTM</text>
-<g class="mark"><title>Siamese BiLSTM, same house number on both sides: AUC 0.914–0.921 (3 seeds, min–max)</title>
-<line class="range s5" x1="579.2" y1="56" x2="585.7" y2="56"/>
-<circle class="dot s5" cx="579.2" cy="56" r="5"/>
-<circle class="dot s5" cx="585.7" cy="56" r="5"/>
-<rect class="hit" x="571.2" y="46" width="22.6" height="20"/>
+<g class="mark"><title>XGBoost, Without missing-number matches (679): 0.910</title>
+<circle class="dot s3" cx="468.3" cy="53" r="5"/>
+<circle class="dot s3" cx="468.3" cy="53" r="5"/>
+<rect class="hit" x="460.3" y="43" width="16.0" height="20"/>
 </g>
-<text class="label" x="180" y="82" text-anchor="end">ESIM</text>
-<g class="mark"><title>ESIM, same house number on both sides: AUC 0.898–0.917 (3 seeds, min–max)</title>
-<line class="range s4" x1="564.1" y1="78" x2="582.0" y2="78"/>
-<circle class="dot s4" cx="564.1" cy="78" r="5"/>
-<circle class="dot s4" cx="582.0" cy="78" r="5"/>
-<rect class="hit" x="556.1" y="68" width="33.9" height="20"/>
+<text class="note" x="0" y="100" letter-spacing="0.08em">NEURAL MODELS</text>
+<line class="grid" x1="0" y1="108" x2="660" y2="108"/>
+<line class="grid" x1="200.0" y1="116" x2="200.0" y2="236"/>
+<line class="grid" x1="353.3" y1="116" x2="353.3" y2="236"/>
+<line class="grid" x1="506.7" y1="116" x2="506.7" y2="236"/>
+<line class="grid" x1="660.0" y1="116" x2="660.0" y2="236"/>
+<text class="label" x="190" y="135" text-anchor="end">Siamese BiLSTM</text>
+<g class="mark"><title>Siamese BiLSTM, All non-identical matches (843): 0.878–0.893</title>
+<line class="range s1" x1="345.7" y1="131" x2="403.2" y2="131"/>
+<circle class="dot s1" cx="345.7" cy="131" r="5"/>
+<circle class="dot s1" cx="403.2" cy="131" r="5"/>
+<rect class="hit" x="337.7" y="121" width="73.5" height="20"/>
 </g>
-<text class="label" x="180" y="104" text-anchor="end">Bi-encoder</text>
-<g class="mark"><title>Bi-encoder, same house number on both sides: AUC 0.927–0.934 (3 seeds, min–max)</title>
-<line class="range s3" x1="591.4" y1="100" x2="598.0" y2="100"/>
-<circle class="dot s3" cx="591.4" cy="100" r="5"/>
-<circle class="dot s3" cx="598.0" cy="100" r="5"/>
-<rect class="hit" x="583.4" y="90" width="22.6" height="20"/>
+<g class="mark"><title>Siamese BiLSTM, Without missing-number matches (679): 0.913–0.923</title>
+<line class="range s3" x1="479.8" y1="131" x2="518.2" y2="131"/>
+<circle class="dot s3" cx="479.8" cy="131" r="5"/>
+<circle class="dot s3" cx="518.2" cy="131" r="5"/>
+<rect class="hit" x="471.8" y="121" width="54.3" height="20"/>
 </g>
-<text class="label" x="180" y="126" text-anchor="end">Cross-encoder</text>
-<g class="mark"><title>Cross-encoder, same house number on both sides: AUC 0.908–0.928 (3 seeds, min–max)</title>
-<line class="range s2" x1="573.5" y1="122" x2="592.3" y2="122"/>
-<circle class="dot s2" cx="573.5" cy="122" r="5"/>
-<circle class="dot s2" cx="592.3" cy="122" r="5"/>
-<rect class="hit" x="565.5" y="112" width="34.8" height="20"/>
+<text class="label" x="190" y="165" text-anchor="end">ESIM (fastText)</text>
+<g class="mark"><title>ESIM (fastText), All non-identical matches (843): 0.861–0.890</title>
+<line class="range s1" x1="280.5" y1="161" x2="391.7" y2="161"/>
+<circle class="dot s1" cx="280.5" cy="161" r="5"/>
+<circle class="dot s1" cx="391.7" cy="161" r="5"/>
+<rect class="hit" x="272.5" y="151" width="127.2" height="20"/>
 </g>
-<text class="group" x="0" y="178">House number missing on one side <tspan class="muted">(164 matches)</tspan></text>
-<line class="chance" x1="190.0" y1="182" x2="190.0" y2="290"/>
-<line class="grid" x1="284.0" y1="182" x2="284.0" y2="290"/>
-<line class="grid" x1="378.0" y1="182" x2="378.0" y2="290"/>
-<line class="grid" x1="472.0" y1="182" x2="472.0" y2="290"/>
-<line class="grid" x1="566.0" y1="182" x2="566.0" y2="290"/>
-<line class="grid" x1="660.0" y1="182" x2="660.0" y2="290"/>
-<text class="label" x="180" y="196" text-anchor="end">XGBoost</text>
-<g class="mark"><title>XGBoost, house number missing on one side: AUC 0.962 (1 run)</title>
-<circle class="dot s1" cx="624.3" cy="192" r="5"/>
-<circle class="dot s1" cx="624.3" cy="192" r="5"/>
-<rect class="hit" x="616.3" y="182" width="16.0" height="20"/>
+<g class="mark"><title>ESIM (fastText), Without missing-number matches (679): 0.894–0.914</title>
+<line class="range s3" x1="407.0" y1="161" x2="483.7" y2="161"/>
+<circle class="dot s3" cx="407.0" cy="161" r="5"/>
+<circle class="dot s3" cx="483.7" cy="161" r="5"/>
+<rect class="hit" x="399.0" y="151" width="92.7" height="20"/>
 </g>
-<text class="label" x="180" y="218" text-anchor="end">Siamese BiLSTM</text>
-<g class="mark"><title>Siamese BiLSTM, house number missing on one side: AUC 0.730–0.810 (3 seeds, min–max)</title>
-<line class="range s5" x1="406.2" y1="214" x2="481.4" y2="214"/>
-<circle class="dot s5" cx="406.2" cy="214" r="5"/>
-<circle class="dot s5" cx="481.4" cy="214" r="5"/>
-<rect class="hit" x="398.2" y="204" width="91.2" height="20"/>
+<text class="label" x="190" y="195" text-anchor="end">DistilBERT bi-encoder</text>
+<g class="mark"><title>DistilBERT bi-encoder, All non-identical matches (843): 0.883–0.893</title>
+<line class="range s1" x1="364.8" y1="191" x2="403.2" y2="191"/>
+<circle class="dot s1" cx="364.8" cy="191" r="5"/>
+<circle class="dot s1" cx="403.2" cy="191" r="5"/>
+<rect class="hit" x="356.8" y="181" width="54.3" height="20"/>
 </g>
-<text class="label" x="180" y="240" text-anchor="end">ESIM</text>
-<g class="mark"><title>ESIM, house number missing on one side: AUC 0.699–0.790 (3 seeds, min–max)</title>
-<line class="range s4" x1="377.1" y1="236" x2="462.6" y2="236"/>
-<circle class="dot s4" cx="377.1" cy="236" r="5"/>
-<circle class="dot s4" cx="462.6" cy="236" r="5"/>
-<rect class="hit" x="369.1" y="226" width="101.5" height="20"/>
+<g class="mark"><title>DistilBERT bi-encoder, Without missing-number matches (679): 0.930–0.937</title>
+<line class="range s3" x1="545.0" y1="191" x2="571.8" y2="191"/>
+<circle class="dot s3" cx="545.0" cy="191" r="5"/>
+<circle class="dot s3" cx="571.8" cy="191" r="5"/>
+<rect class="hit" x="537.0" y="181" width="42.8" height="20"/>
 </g>
-<text class="label" x="180" y="262" text-anchor="end">Bi-encoder</text>
-<g class="mark"><title>Bi-encoder, house number missing on one side: AUC 0.692–0.724 (3 seeds, min–max)</title>
-<line class="range s3" x1="370.5" y1="258" x2="400.6" y2="258"/>
-<circle class="dot s3" cx="370.5" cy="258" r="5"/>
-<circle class="dot s3" cx="400.6" cy="258" r="5"/>
-<rect class="hit" x="362.5" y="248" width="46.1" height="20"/>
+<text class="label" x="190" y="225" text-anchor="end">DistilBERT cross-encoder</text>
+<g class="mark"><title>DistilBERT cross-encoder, All non-identical matches (843): 0.888–0.904</title>
+<line class="range s1" x1="384.0" y1="221" x2="445.3" y2="221"/>
+<circle class="dot s1" cx="384.0" cy="221" r="5"/>
+<circle class="dot s1" cx="445.3" cy="221" r="5"/>
+<rect class="hit" x="376.0" y="211" width="77.3" height="20"/>
 </g>
-<text class="label" x="180" y="284" text-anchor="end">Cross-encoder</text>
-<g class="mark"><title>Cross-encoder, house number missing on one side: AUC 0.775–0.804 (3 seeds, min–max)</title>
-<line class="range s2" x1="448.5" y1="280" x2="475.8" y2="280"/>
-<circle class="dot s2" cx="448.5" cy="280" r="5"/>
-<circle class="dot s2" cx="475.8" cy="280" r="5"/>
-<rect class="hit" x="440.5" y="270" width="43.3" height="20"/>
+<g class="mark"><title>DistilBERT cross-encoder, Without missing-number matches (679): 0.908–0.928</title>
+<line class="range s3" x1="460.7" y1="221" x2="537.3" y2="221"/>
+<circle class="dot s3" cx="460.7" cy="221" r="5"/>
+<circle class="dot s3" cx="537.3" cy="221" r="5"/>
+<rect class="hit" x="452.7" y="211" width="92.7" height="20"/>
 </g>
-<text class="group" x="0" y="336">Two different house numbers <tspan class="muted">(41 matches)</tspan></text>
-<line class="chance" x1="190.0" y1="340" x2="190.0" y2="448"/>
-<line class="grid" x1="284.0" y1="340" x2="284.0" y2="448"/>
-<line class="grid" x1="378.0" y1="340" x2="378.0" y2="448"/>
-<line class="grid" x1="472.0" y1="340" x2="472.0" y2="448"/>
-<line class="grid" x1="566.0" y1="340" x2="566.0" y2="448"/>
-<line class="grid" x1="660.0" y1="340" x2="660.0" y2="448"/>
-<text class="label" x="180" y="354" text-anchor="end">XGBoost</text>
-<g class="mark"><title>XGBoost, two different house numbers: AUC 0.774 (1 run)</title>
-<circle class="dot s1" cx="447.6" cy="350" r="5"/>
-<circle class="dot s1" cx="447.6" cy="350" r="5"/>
-<rect class="hit" x="439.6" y="340" width="16.0" height="20"/>
-</g>
-<text class="label" x="180" y="376" text-anchor="end">Siamese BiLSTM</text>
-<g class="mark"><title>Siamese BiLSTM, two different house numbers: AUC 0.904–0.945 (3 seeds, min–max)</title>
-<line class="range s5" x1="569.8" y1="372" x2="608.3" y2="372"/>
-<circle class="dot s5" cx="569.8" cy="372" r="5"/>
-<circle class="dot s5" cx="608.3" cy="372" r="5"/>
-<rect class="hit" x="561.8" y="362" width="54.5" height="20"/>
-</g>
-<text class="label" x="180" y="398" text-anchor="end">ESIM</text>
-<g class="mark"><title>ESIM, two different house numbers: AUC 0.835–0.871 (3 seeds, min–max)</title>
-<line class="range s4" x1="504.9" y1="394" x2="538.7" y2="394"/>
-<circle class="dot s4" cx="504.9" cy="394" r="5"/>
-<circle class="dot s4" cx="538.7" cy="394" r="5"/>
-<rect class="hit" x="496.9" y="384" width="49.8" height="20"/>
-</g>
-<text class="label" x="180" y="420" text-anchor="end">Bi-encoder</text>
-<g class="mark"><title>Bi-encoder, two different house numbers: AUC 0.964–0.973 (3 seeds, min–max)</title>
-<line class="range s3" x1="626.2" y1="416" x2="634.6" y2="416"/>
-<circle class="dot s3" cx="626.2" cy="416" r="5"/>
-<circle class="dot s3" cx="634.6" cy="416" r="5"/>
-<rect class="hit" x="618.2" y="406" width="24.5" height="20"/>
-</g>
-<text class="label" x="180" y="442" text-anchor="end">Cross-encoder</text>
-<g class="mark"><title>Cross-encoder, two different house numbers: AUC 0.916–0.937 (3 seeds, min–max)</title>
-<line class="range s2" x1="581.0" y1="438" x2="600.8" y2="438"/>
-<circle class="dot s2" cx="581.0" cy="438" r="5"/>
-<circle class="dot s2" cx="600.8" cy="438" r="5"/>
-<rect class="hit" x="573.0" y="428" width="35.7" height="20"/>
-</g>
-<text class="tick" x="190.0" y="492" text-anchor="middle">0.5 (chance)</text>
-<text class="tick" x="284.0" y="492" text-anchor="middle">0.6</text>
-<text class="tick" x="378.0" y="492" text-anchor="middle">0.7</text>
-<text class="tick" x="472.0" y="492" text-anchor="middle">0.8</text>
-<text class="tick" x="566.0" y="492" text-anchor="middle">0.9</text>
-<text class="tick" x="660.0" y="492" text-anchor="middle">1</text>
-<text class="tick" x="425" y="510" text-anchor="middle">AUC: true matches vs look-alike streets (0.5 = coin flip)</text>
-</svg></div><details class="table-view"><summary>Show as a table</summary><table><tr><th>Group</th><th>n</th><th>XGBoost</th><th>Siamese BiLSTM</th><th>ESIM</th><th>Bi-encoder</th><th>Cross-encoder</th></tr><tr><td>Same house number on both sides</td><td>638</td><td>0.919</td><td>0.914–0.921</td><td>0.898–0.917</td><td>0.927–0.934</td><td>0.908–0.928</td></tr><tr><td>House number missing on one side</td><td>164</td><td>0.962</td><td>0.730–0.810</td><td>0.699–0.790</td><td>0.692–0.724</td><td>0.775–0.804</td></tr><tr><td>Two different house numbers</td><td>41</td><td>0.774</td><td>0.904–0.945</td><td>0.835–0.871</td><td>0.964–0.973</td><td>0.916–0.937</td></tr></table></details></figure>
-<ul>
-<li>When <strong>both sides have the same house number</strong>, every model is at 0.90–0.93.</li>
-<li>When the house number is <strong>missing from one side</strong>, XGBoost is at 0.96 and the neural models at 0.69–0.81.</li>
-<li>The group with <strong>two different house numbers</strong> on a true match has only 41 pairs; here the neural models are ahead of XGBoost.</li>
-</ul>
-<p>So the neural models aren&rsquo;t worse at streets: setting the missing-number matches aside, every one of them ranks matches against look-alike streets about as well as XGBoost or better. XGBoost&rsquo;s overall lead comes from the group of 164 pairs.</p>
-<p><strong>4. The 0.5 threshold is misleading on its own.</strong> The DistilBERT bi-encoder finds 89–91% of the non-identical matches but rejects only 58–69% of the look-alike streets. The cross-encoder is the opposite: 80–83% found, 86–89% rejected. Their AUCs overlap (0.883–0.893 and 0.888–0.904), so they rank the hard pairs about equally well. The difference is in how their scores are spread: the cross-encoder scores most pairs close to 0 or 1, so almost any threshold works for it, while the bi-encoder only separates matches from look-alike streets with a threshold near 0.99.</p>
-<p><strong>5. Cross-attention brought no clear gain in ranking.</strong> Two pairs of models differ mainly in whether the two addresses attend to each other: the cross-encoder against the bi-encoder, and ESIM against the siamese BiLSTM. In both pairs the AUCs overlap. The DistilBERT pair is the cleaner test, since ESIM also reads words where the siamese model reads characters.</p>
-<h2>ESIM and rare house numbers</h2>
-<p>ESIM, following the original paper, uses word2vec vectors, which only cover words seen at least twice. Every other word becomes one shared &ldquo;unknown&rdquo; token. When both house numbers of a same-street pair are seen only once, <code>2147 SUMMER ST</code> / <code>1867 SUMMER ST</code> becomes the same input as <code>2147 SUMMER ST</code> / <code>2147 SUMMER ST</code>, with the opposite label. Each training run picked one answer for the whole group.</p>
-<p>Giving every word its own word2vec vector did not fix it: word2vec builds a number&rsquo;s vector from the words around it, so two numbers on the same street end up with nearly the same vector. Two settings did fix it: fastText, which builds each word&rsquo;s vector from its character pieces, and a fixed random vector for each rare word. I kept fastText, which ranks non-identical matches against look-alike streets better on validation. Characters (siamese) and sub-word pieces (DistilBERT) never had this problem.</p>
-<h2>Correction to an earlier version</h2>
-<p>An earlier version of this post and the paper had a data error. When building the different-number pairs, I checked that both places had a house number using their Overture addresses, but one side of the pair uses the Foursquare address, which sometimes leaves the number off. So about 2% of the different-number pairs looked like <code>74 BEACH RD</code> / <code>BEACH RD</code>, the same pattern as some true matches, with the opposite label. I fixed the check, rebuilt the pairs and retrained every model; all numbers here come from the corrected data. The fix mainly changed the matches with a missing number, which every model now finds far more often. <a href="https://github.com/DZhang3210/address-matching-by-pair-type/blob/main/paper/address-matching-by-pair-type.pdf">Appendix B of the paper</a> describes the error and what it changed.</p>
+<text class="tick" x="200.0" y="262" text-anchor="middle">0.84</text>
+<text class="tick" x="353.3" y="262" text-anchor="middle">0.88</text>
+<text class="tick" x="506.7" y="262" text-anchor="middle">0.92</text>
+<text class="tick" x="660.0" y="262" text-anchor="middle">0.96</text>
+<text class="tick" x="430" y="278" text-anchor="middle">AUC: non-identical matches vs look-alike streets (axis starts at 0.84)</text>
+</svg></div><details class="table-view"><summary>Show as a table</summary><table><tr><th>Model</th><th>All non-identical</th><th>Without missing-number matches</th></tr><tr><td>XGBoost</td><td>0.920</td><td>0.910</td></tr><tr><td>Siamese BiLSTM</td><td>0.878–0.893</td><td>0.913–0.923</td></tr><tr><td>ESIM (fastText)</td><td>0.861–0.890</td><td>0.894–0.914</td></tr><tr><td>DistilBERT bi-encoder</td><td>0.883–0.893</td><td>0.930–0.937</td></tr><tr><td>DistilBERT cross-encoder</td><td>0.888–0.904</td><td>0.908–0.928</td></tr></table></details></figure>
+<p><strong>4. The bi- and cross-encoder rank the hard pairs equally; the cross-encoder separates them more cleanly.</strong> Their AUCs overlap (0.883–0.893 and 0.888–0.904); as in the results table, this is the AUC of non-identical matches against look-alike streets, so both rank these two pair types about equally well. The difference is in how their scores are spread. The cross-encoder scores most pairs close to 0 or 1, so almost any threshold works for it. The bi-encoder scores many look-alike streets just below the true matches, so it only separates the two near a threshold of 0.99. At the default 0.5 this makes them look very different: the bi-encoder finds 89–91% of the non-identical matches but rejects only 58–69% of the look-alike streets, while the cross-encoder finds 80–83% and rejects 86–89%.</p>
+<figure class="chart"><figcaption><strong>Same ranking, different score spread</strong><span>Youden&#x27;s J (share of non-identical matches accepted minus share of look-alike streets accepted) at every threshold. Validation set; one line per seed.</span></figcaption><div class="legend"><span><i class="sw s1"></i>Bi-encoder</span><span><i class="sw s2"></i>Cross-encoder</span></div><div class="svg-scroll"><svg viewBox="0 0 680 294" role="img" aria-label="Youden's J against the threshold, bi-encoder vs cross-encoder">
+<line class="grid" x1="50" y1="250.0" x2="660" y2="250.0"/>
+<text class="tick" x="42" y="254.0" text-anchor="end">0</text>
+<line class="grid" x1="50" y1="190.0" x2="660" y2="190.0"/>
+<text class="tick" x="42" y="194.0" text-anchor="end">0.2</text>
+<line class="grid" x1="50" y1="130.0" x2="660" y2="130.0"/>
+<text class="tick" x="42" y="134.0" text-anchor="end">0.4</text>
+<line class="grid" x1="50" y1="70.0" x2="660" y2="70.0"/>
+<text class="tick" x="42" y="74.0" text-anchor="end">0.6</text>
+<line class="grid" x1="50" y1="10.0" x2="660" y2="10.0"/>
+<text class="tick" x="42" y="14.0" text-anchor="end">0.8</text>
+<text class="tick" x="50.0" y="268" text-anchor="middle">0</text>
+<text class="tick" x="172.0" y="268" text-anchor="middle">0.2</text>
+<text class="tick" x="294.0" y="268" text-anchor="middle">0.4</text>
+<text class="tick" x="416.0" y="268" text-anchor="middle">0.6</text>
+<text class="tick" x="538.0" y="268" text-anchor="middle">0.8</text>
+<text class="tick" x="660.0" y="268" text-anchor="middle">1</text>
+<g class="mark"><title>Bi-encoder, seed 0: best J 0.67 at threshold 0.999</title><path class="line s1" d="M56.1,141.4 L62.2,134.2 L68.3,128.5 L74.4,124.9 L80.5,120.7 L86.6,119.2 L92.7,115.3 L98.8,115.0 L104.9,112.9 L111.0,111.4 L117.1,108.1 L123.2,107.2 L129.3,106.3 L135.4,106.3 L141.5,105.1 L147.6,104.5 L153.7,103.3 L159.8,102.4 L165.9,102.4 L172.0,102.1 L178.1,101.8 L184.2,100.6 L190.3,100.0 L196.4,99.7 L202.5,99.4 L208.6,98.8 L214.7,98.2 L220.8,96.7 L226.9,96.7 L233.0,97.6 L239.1,96.7 L245.2,96.1 L251.3,95.5 L257.4,95.8 L263.5,94.6 L269.6,94.3 L275.7,93.7 L281.8,93.1 L287.9,91.6 L294.0,91.3 L300.1,90.4 L306.2,90.1 L312.3,89.2 L318.4,88.0 L324.5,87.7 L330.6,87.7 L336.7,87.4 L342.8,87.1 L348.9,86.2 L355.0,85.9 L361.1,85.6 L367.2,85.3 L373.3,84.4 L379.4,83.8 L385.5,83.2 L391.6,82.9 L397.7,82.9 L403.8,82.9 L409.9,82.3 L416.0,82.3 L422.1,81.4 L428.2,81.4 L434.3,80.8 L440.4,80.5 L446.5,79.9 L452.6,78.7 L458.7,78.4 L464.8,78.1 L470.9,77.5 L477.0,76.9 L483.1,76.6 L489.2,75.7 L495.3,75.1 L501.4,75.1 L507.5,74.8 L513.6,74.5 L519.7,74.5 L525.8,73.9 L531.9,73.6 L538.0,73.3 L544.1,73.3 L550.2,72.7 L556.3,72.1 L562.4,72.7 L568.5,72.1 L574.6,72.1 L580.7,71.2 L586.8,70.0 L592.9,69.4 L599.0,67.6 L605.1,65.8 L611.2,66.1 L617.3,64.0 L623.4,63.4 L629.5,62.2 L632.5,61.9 L635.6,58.6 L638.6,56.5 L641.7,54.7 L644.8,55.3 L647.8,53.2 L650.9,51.7 L653.9,51.1 L655.1,51.4 L656.3,51.4 L657.6,52.0 L658.8,52.3 L659.4,48.4"/></g>
+<g class="mark"><title>Bi-encoder, seed 1: best J 0.66 at threshold 0.996</title><path class="line s1" d="M56.1,185.5 L62.2,172.3 L68.3,163.9 L74.4,156.4 L80.5,152.5 L86.6,150.4 L92.7,147.1 L98.8,145.6 L104.9,145.3 L111.0,141.4 L117.1,139.6 L123.2,137.5 L129.3,136.9 L135.4,134.2 L141.5,132.4 L147.6,130.6 L153.7,130.0 L159.8,128.5 L165.9,127.6 L172.0,127.0 L178.1,126.4 L184.2,124.9 L190.3,124.6 L196.4,123.7 L202.5,123.4 L208.6,121.9 L214.7,121.3 L220.8,120.1 L226.9,119.2 L233.0,117.7 L239.1,116.8 L245.2,115.6 L251.3,115.3 L257.4,115.0 L263.5,114.7 L269.6,112.9 L275.7,112.0 L281.8,111.7 L287.9,111.4 L294.0,110.5 L300.1,109.9 L306.2,109.9 L312.3,108.7 L318.4,108.1 L324.5,107.8 L330.6,108.1 L336.7,107.5 L342.8,106.6 L348.9,106.6 L355.0,106.0 L361.1,106.0 L367.2,105.1 L373.3,104.2 L379.4,104.2 L385.5,102.7 L391.6,102.1 L397.7,101.5 L403.8,101.2 L409.9,100.9 L416.0,100.0 L422.1,99.1 L428.2,97.9 L434.3,97.9 L440.4,97.6 L446.5,96.7 L452.6,95.5 L458.7,95.2 L464.8,95.2 L470.9,94.9 L477.0,94.3 L483.1,92.8 L489.2,92.2 L495.3,91.9 L501.4,90.4 L507.5,89.8 L513.6,89.2 L519.7,89.2 L525.8,88.0 L531.9,87.4 L538.0,86.8 L544.1,86.5 L550.2,86.2 L556.3,84.7 L562.4,83.8 L568.5,81.7 L574.6,81.4 L580.7,82.3 L586.8,79.9 L592.9,79.9 L599.0,77.8 L605.1,76.6 L611.2,76.0 L617.3,75.4 L623.4,72.4 L629.5,70.6 L632.5,69.4 L635.6,64.9 L638.6,65.2 L641.7,64.3 L644.8,63.4 L647.8,62.2 L650.9,59.8 L653.9,56.5 L655.1,54.1 L656.3,51.4 L657.6,51.1 L658.8,56.8 L659.4,62.8"/></g>
+<g class="mark"><title>Bi-encoder, seed 2: best J 0.68 at threshold 0.992</title><path class="line s1" d="M56.1,138.4 L62.2,131.2 L68.3,129.1 L74.4,125.5 L80.5,121.3 L86.6,118.0 L92.7,115.6 L98.8,115.0 L104.9,114.4 L111.0,113.5 L117.1,113.5 L123.2,112.9 L129.3,112.3 L135.4,110.8 L141.5,110.2 L147.6,109.6 L153.7,108.4 L159.8,107.8 L165.9,106.6 L172.0,105.4 L178.1,103.3 L184.2,102.7 L190.3,102.4 L196.4,101.8 L202.5,101.2 L208.6,100.6 L214.7,100.6 L220.8,100.6 L226.9,100.6 L233.0,100.0 L239.1,98.5 L245.2,97.6 L251.3,97.9 L257.4,97.0 L263.5,96.1 L269.6,96.1 L275.7,94.3 L281.8,94.3 L287.9,93.7 L294.0,93.7 L300.1,93.7 L306.2,93.1 L312.3,92.8 L318.4,91.9 L324.5,91.0 L330.6,91.0 L336.7,90.4 L342.8,90.1 L348.9,90.1 L355.0,89.5 L361.1,89.2 L367.2,87.7 L373.3,87.1 L379.4,86.5 L385.5,86.2 L391.6,84.7 L397.7,84.1 L403.8,83.8 L409.9,82.9 L416.0,81.1 L422.1,80.2 L428.2,80.8 L434.3,79.6 L440.4,79.3 L446.5,78.7 L452.6,78.4 L458.7,78.1 L464.8,78.1 L470.9,77.5 L477.0,77.5 L483.1,76.9 L489.2,75.7 L495.3,75.4 L501.4,74.5 L507.5,74.5 L513.6,74.5 L519.7,75.1 L525.8,74.2 L531.9,74.2 L538.0,73.3 L544.1,72.4 L550.2,72.7 L556.3,72.1 L562.4,71.8 L568.5,69.7 L574.6,69.7 L580.7,68.5 L586.8,67.3 L592.9,67.0 L599.0,65.5 L605.1,64.6 L611.2,64.3 L617.3,63.4 L623.4,62.8 L629.5,61.0 L632.5,60.7 L635.6,60.4 L638.6,59.2 L641.7,58.0 L644.8,55.0 L647.8,52.9 L650.9,51.7 L653.9,48.7 L655.1,46.6 L656.3,46.9 L657.6,48.4 L658.8,48.7 L659.4,51.7"/></g>
+<g class="mark"><title>Cross-encoder, seed 0: best J 0.76 at threshold 0.95</title><path class="line s2" d="M56.1,97.0 L62.2,66.4 L68.3,57.7 L74.4,51.4 L80.5,46.6 L86.6,43.9 L92.7,42.1 L98.8,40.3 L104.9,40.0 L111.0,38.8 L117.1,37.9 L123.2,37.6 L129.3,37.3 L135.4,35.8 L141.5,35.2 L147.6,34.0 L153.7,33.7 L159.8,33.7 L165.9,33.1 L172.0,32.8 L178.1,31.9 L184.2,31.9 L190.3,31.9 L196.4,31.3 L202.5,31.0 L208.6,31.0 L214.7,30.4 L220.8,30.1 L226.9,29.2 L233.0,28.3 L239.1,27.7 L245.2,27.4 L251.3,27.4 L257.4,27.1 L263.5,26.8 L269.6,26.5 L275.7,26.5 L281.8,26.5 L287.9,26.5 L294.0,26.5 L300.1,26.5 L306.2,26.8 L312.3,26.8 L318.4,26.8 L324.5,26.8 L330.6,26.5 L336.7,26.8 L342.8,26.8 L348.9,27.1 L355.0,26.5 L361.1,25.9 L367.2,25.6 L373.3,25.6 L379.4,25.9 L385.5,25.6 L391.6,25.6 L397.7,25.6 L403.8,25.9 L409.9,25.9 L416.0,25.6 L422.1,25.0 L428.2,24.7 L434.3,24.7 L440.4,25.0 L446.5,24.7 L452.6,23.8 L458.7,24.1 L464.8,24.1 L470.9,23.8 L477.0,23.5 L483.1,23.8 L489.2,23.5 L495.3,23.5 L501.4,23.5 L507.5,23.8 L513.6,23.8 L519.7,23.8 L525.8,23.5 L531.9,23.2 L538.0,23.2 L544.1,22.6 L550.2,22.3 L556.3,22.3 L562.4,23.2 L568.5,23.2 L574.6,23.8 L580.7,23.5 L586.8,23.2 L592.9,23.5 L599.0,22.6 L605.1,22.3 L611.2,22.3 L617.3,21.7 L623.4,22.3 L629.5,21.4 L632.5,22.0 L635.6,21.7 L638.6,21.7 L641.7,22.3 L644.8,22.0 L647.8,23.2 L650.9,22.9 L653.9,24.1 L655.1,23.2 L656.3,25.9 L657.6,28.6 L658.8,37.0 L659.4,55.6"/></g>
+<g class="mark"><title>Cross-encoder, seed 1: best J 0.73 at threshold 0.87</title><path class="line s2" d="M56.1,113.5 L62.2,102.4 L68.3,99.7 L74.4,67.0 L80.5,58.9 L86.6,52.9 L92.7,51.4 L98.8,49.9 L104.9,49.6 L111.0,48.1 L117.1,46.9 L123.2,46.6 L129.3,46.0 L135.4,45.7 L141.5,45.7 L147.6,45.7 L153.7,45.4 L159.8,45.1 L165.9,45.4 L172.0,43.9 L178.1,44.5 L184.2,43.9 L190.3,43.6 L196.4,43.6 L202.5,43.9 L208.6,43.3 L214.7,41.5 L220.8,41.5 L226.9,40.3 L233.0,40.3 L239.1,40.0 L245.2,39.1 L251.3,39.1 L257.4,38.8 L263.5,38.5 L269.6,38.5 L275.7,38.5 L281.8,38.5 L287.9,38.5 L294.0,38.5 L300.1,38.5 L306.2,38.5 L312.3,38.5 L318.4,38.5 L324.5,38.2 L330.6,38.2 L336.7,38.2 L342.8,38.5 L348.9,39.1 L355.0,39.1 L361.1,38.8 L367.2,38.8 L373.3,39.1 L379.4,39.1 L385.5,39.1 L391.6,39.1 L397.7,38.8 L403.8,38.8 L409.9,39.1 L416.0,38.8 L422.1,38.5 L428.2,38.5 L434.3,38.2 L440.4,38.5 L446.5,38.2 L452.6,37.9 L458.7,37.9 L464.8,37.6 L470.9,37.6 L477.0,37.0 L483.1,37.3 L489.2,36.7 L495.3,37.0 L501.4,37.0 L507.5,36.7 L513.6,37.0 L519.7,36.7 L525.8,36.4 L531.9,36.1 L538.0,35.5 L544.1,34.0 L550.2,33.1 L556.3,32.8 L562.4,32.8 L568.5,32.5 L574.6,33.1 L580.7,32.2 L586.8,32.2 L592.9,32.5 L599.0,32.5 L605.1,33.4 L611.2,34.3 L617.3,35.5 L623.4,34.9 L629.5,34.9 L632.5,35.5 L635.6,37.9 L638.6,38.2 L641.7,39.1 L644.8,38.5 L647.8,40.6 L650.9,44.8 L653.9,54.4 L655.1,94.9 L656.3,148.0 L657.6,250.0 L658.8,250.0 L659.4,250.0"/></g>
+<g class="mark"><title>Cross-encoder, seed 2: best J 0.77 at threshold 0.91</title><path class="line s2" d="M56.1,106.6 L62.2,91.0 L68.3,76.3 L74.4,67.6 L80.5,59.8 L86.6,55.0 L92.7,52.6 L98.8,47.5 L104.9,40.3 L111.0,38.5 L117.1,37.6 L123.2,37.0 L129.3,35.8 L135.4,34.3 L141.5,33.4 L147.6,32.5 L153.7,32.2 L159.8,31.9 L165.9,31.6 L172.0,31.3 L178.1,31.3 L184.2,31.0 L190.3,30.7 L196.4,29.8 L202.5,30.4 L208.6,29.2 L214.7,29.5 L220.8,28.6 L226.9,27.1 L233.0,27.1 L239.1,26.8 L245.2,25.6 L251.3,24.7 L257.4,24.4 L263.5,24.1 L269.6,23.8 L275.7,23.8 L281.8,23.8 L287.9,23.5 L294.0,23.5 L300.1,23.5 L306.2,22.6 L312.3,22.9 L318.4,22.3 L324.5,22.0 L330.6,22.0 L336.7,22.0 L342.8,22.0 L348.9,22.0 L355.0,22.0 L361.1,21.7 L367.2,21.7 L373.3,21.7 L379.4,21.4 L385.5,21.7 L391.6,21.7 L397.7,21.4 L403.8,21.4 L409.9,22.0 L416.0,21.4 L422.1,21.1 L428.2,22.0 L434.3,22.0 L440.4,22.0 L446.5,22.0 L452.6,22.0 L458.7,22.0 L464.8,22.0 L470.9,22.3 L477.0,22.0 L483.1,22.0 L489.2,22.0 L495.3,22.0 L501.4,22.0 L507.5,22.0 L513.6,22.0 L519.7,22.0 L525.8,22.0 L531.9,21.7 L538.0,21.4 L544.1,21.1 L550.2,22.0 L556.3,22.0 L562.4,22.0 L568.5,22.3 L574.6,22.0 L580.7,21.7 L586.8,21.4 L592.9,22.0 L599.0,21.1 L605.1,20.2 L611.2,20.2 L617.3,20.5 L623.4,21.1 L629.5,20.2 L632.5,20.2 L635.6,21.1 L638.6,22.3 L641.7,22.0 L644.8,23.8 L647.8,23.2 L650.9,23.2 L653.9,27.1 L655.1,30.7 L656.3,38.2 L657.6,181.6 L658.8,250.0 L659.4,250.0"/></g>
+<text class="tick" x="355" y="290" text-anchor="middle">Threshold</text>
+</svg></div><details class="table-view"><summary>Show as a table</summary><table><tr><th>Model</th><th>Seed</th><th>Best J</th><th>At threshold</th><th>J at 0.5</th></tr><tr><td>Bi-encoder</td><td>0</td><td>0.67</td><td>0.999</td><td>0.55</td></tr><tr><td>Bi-encoder</td><td>1</td><td>0.66</td><td>0.996</td><td>0.48</td></tr><tr><td>Bi-encoder</td><td>2</td><td>0.68</td><td>0.992</td><td>0.54</td></tr><tr><td>Cross-encoder</td><td>0</td><td>0.76</td><td>0.95</td><td>0.74</td></tr><tr><td>Cross-encoder</td><td>1</td><td>0.73</td><td>0.87</td><td>0.70</td></tr><tr><td>Cross-encoder</td><td>2</td><td>0.77</td><td>0.91</td><td>0.76</td></tr></table></details></figure>
+<p><strong>5. Cross-attention brought no clear gain in ranking.</strong> Two pairs of models differ mainly in whether the two addresses attend to each other: the cross-encoder against the bi-encoder, and ESIM against the siamese BiLSTM. In both pairs the AUCs overlap:</p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>Pair</th>
+<th>Without cross-attention</th>
+<th>With cross-attention</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>DistilBERT</td>
+<td>Bi-encoder: 0.883–0.893</td>
+<td>Cross-encoder: 0.888–0.904</td>
+</tr>
+<tr>
+<td>BiLSTM</td>
+<td>Siamese BiLSTM: 0.878–0.893</td>
+<td>ESIM: 0.861–0.890</td>
+</tr>
+</tbody>
+</table></div>
+<p><em>AUC of non-identical matches against look-alike streets, test set, min–max over three seeds.</em></p>
+<p>The DistilBERT pair is the cleaner test, since ESIM also reads words where the siamese model reads characters.</p>
 <h2>What I&rsquo;d do next</h2>
 <ul>
 <li><strong>Give the neural models the house number separately</strong>, or at least a &ldquo;number missing&rdquo; signal, like the classical models have. That is where they fall behind.</li>
@@ -433,7 +389,30 @@
 <li><strong>Code:</strong> <a href="https://github.com/DZhang3210/address-matching-by-pair-type">github.com/DZhang3210/address-matching-by-pair-type</a>, including a notebook that reproduces every table</li>
 <li><strong>Trained models:</strong> <a href="https://huggingface.co/zhangdav/address-matching-by-pair-type">huggingface.co/zhangdav/address-matching-by-pair-type</a></li>
 <li><strong>Dataset:</strong> <a href="https://huggingface.co/datasets/zhangdav/address-matching-by-pair-type">huggingface.co/datasets/zhangdav/address-matching-by-pair-type</a></li>
-</ul></article>
+</ul>
+<h2>Addendum: ESIM and rare house numbers</h2>
+<p>A detail from building ESIM, not needed for the results above.</p>
+<p><strong>The problem.</strong> ESIM, following the original paper, uses word2vec vectors, which only cover words seen at least twice (<code>min_count</code> 2). Every other word becomes one shared &ldquo;unknown&rdquo; token. When both house numbers of a same-street pair are seen only once, <code>2147 SUMMER ST</code> / <code>1867 SUMMER ST</code> becomes <code>UNK SUMMER ST</code> / <code>UNK SUMMER ST</code>: the same input as the identical match <code>2147 SUMMER ST</code> / <code>2147 SUMMER ST</code>, with the opposite label. The model can&rsquo;t tell the two apart, so each training run picks one answer for the whole group. All three seeds settled on &ldquo;non-match&rdquo;, finding at most 22% of the group&rsquo;s identical matches. The group is small, about 0.6% of validation pairs, but telling two house numbers apart is the minimum a matcher should do.</p>
+<p><strong>First attempt: every word gets a vector (<code>min_count</code> 1).</strong> This removes the shared unknown token, but it did not fix the problem. word2vec builds a number&rsquo;s vector from the words around it, not from its digits. Two numbers on the same street appear next to the same words, so their vectors end up nearly the same (cosine 0.93, against 0.57 for random pairs of numbers), and the model still can&rsquo;t tell <code>2147</code> from <code>1867</code>.</p>
+<p><strong>Three more settings</strong>, each changing how a rare number is embedded:</p>
+<ul>
+<li><strong>fastText</strong> (<code>min_count</code> 1) builds each word&rsquo;s vector from its character pieces, so a number&rsquo;s vector comes from its digits.</li>
+<li><strong>A random vector per rare word</strong>: each word word2vec drops gets its own fixed random vector instead of the shared unknown token. Two different numbers get unrelated vectors.</li>
+<li><strong>Stacked</strong>: each word&rsquo;s word2vec and fastText vectors side by side.</li>
+</ul>
+<p><strong>Results on the rare-number group.</strong> fastText and the random vector both fix the group: on every seed they find every identical match, reject over 90% of the different-number pairs, and rank the two perfectly (AUC 1.00). Stacking also ranks the group perfectly and finds every match, but rejects only 75–88% of the different-number pairs.</p>
+<p><strong>fastText, the kept setting.</strong> Of the two that fix the group, each is better at one thing. The random vector rejects slightly more of the group&rsquo;s different-number pairs (94–96% against 91–94%), while fastText ranks non-identical matches against look-alike streets better (AUC 0.87–0.90 against 0.85–0.88). The random vector&rsquo;s edge is narrow by design: unrelated vectors are exactly the right signal for two unknown house numbers, but it gives every rare word an unrelated vector, so a rare spelling of a street in a true match also looks like a different street. fastText builds its vectors from character pieces, so it reads the numbers and keeps spelling variants close.</p>
+<p>Characters (siamese) and sub-word pieces (DistilBERT) never had this problem.</p>
+<div class="table-scroll"><table>
+<tr><th>Setting</th><th>Rare-number matches found</th><th class="key">Rare-number non-matches rejected</th><th>Rare-number AUC</th><th class="key">AUC, non-identical vs look-alike</th></tr>
+<tr><td>word2vec, <code>min_count</code> 2</td><td>1–22%</td><td class="key">95–100%</td><td>0.663–0.720</td><td class="key">0.899–0.909</td></tr>
+<tr><td>word2vec, <code>min_count</code> 1</td><td>40–78%</td><td class="key">68–83%</td><td>0.678–0.845</td><td class="key">0.854–0.900</td></tr>
+<tr class="hl"><td>fastText</td><td>100%</td><td class="key">91–94%</td><td>1.000</td><td class="key">0.867–0.902</td></tr>
+<tr class="hl"><td>Random vector per rare word</td><td>100%</td><td class="key">94–96%</td><td>1.000</td><td class="key">0.847–0.877</td></tr>
+<tr><td>Stacked</td><td>100%</td><td class="key">75–88%</td><td>1.000</td><td class="key">0.898–0.916</td></tr>
+</table></div>
+
+<p><em>Validation set, min–max over three seeds. Highlighted: the two settings that fix the rare-number group. Shaded: the two columns they trade off on.</em></p></article>
 </div></main>
 <footer class="site"><div class="wrap">David Zhang</div></footer>
 </body>

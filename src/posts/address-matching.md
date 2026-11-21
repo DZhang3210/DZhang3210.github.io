@@ -15,7 +15,7 @@ I used two open datasets, [Overture Maps](https://overturemaps.org/) and [Foursq
 
 <figure><img src="../../assets/figures/data-pipeline.svg" alt="Data pipeline: two open datasets, linked with Overture's bridge files, cleaned, split by ZIP code, doubtful pairs set aside, duplicates removed, then non-matches added at 1:9"><figcaption>How the dataset is built. Details of each step are in the <a href="https://github.com/DZhang3210/address-matching-by-pair-type/blob/main/paper/address-matching-by-pair-type.pdf">full write-up</a>.</figcaption></figure>
 
-Then the negatives, the pairs that are *not* the same place. Random pairs are too easy, so I built several kinds:
+Then the negatives, the pairs that are *not* the same place. Random pairs are too easy, so I built several kinds, listed below. The two hard pair types are the non-identical matches and the look-alike streets; the models differ only on these. The dataset has a 1:9 ratio of matches to non-matches, and to avoid data leakage, each ZIP code belongs to only one of the train, validation and test splits.
 
 | Pair type | Example | Same place? | Test pairs | Evaluated on |
 |---|---|---|---|---|
@@ -35,13 +35,7 @@ Then the negatives, the pairs that are *not* the same place. Random pairs are to
 | Look-alike street | A real address with its street swapped for a different, similar-looking street from the same ZIP; house number kept. Generated because real look-alike pairs are too rare |
 | Random | Two random addresses from the same split |
 
-The two hard pair types are the non-identical matches and the look-alike streets; the models differ only on these.
-
-The dataset has a 1:9 ratio of matches to non-matches. To avoid data leakage, each ZIP code belongs to only one of the train, validation and test splits.
-
 ## The models
-
-I compared two kinds of models.
 
 **Classical models** get the address pre-chopped into pieces: house number, street and ZIP code. For each piece I compute string-similarity scores (Jaro-Winkler, Levenshtein, character-overlap measures and so on), plus a flag for pairs where one side has no house number: 23 features in total. When one side has no number, its house-number features are set to −1, meaning "not comparable". I train logistic regression, a random forest and XGBoost on these features. XGBoost is the tree model used in the comparisons below.
 
@@ -60,48 +54,52 @@ Each neural model is trained with three seeds; the ranges below are the minimum 
 
 ## How I scored them
 
-Two kinds of numbers:
+Each model is scored separately on each pair type: the share of matches it finds, or of non-matches it rejects. Two columns (shaded) matter most:
 
-1. **Per pair type at a 0.5 threshold**: what share of true matches did the model find, and what share of each kind of non-match did it reject?
-2. **AUC**, which ignores the threshold. Take a random true (non-identical) match and a random look-alike street. What's the chance the model gives the true match the higher score? 0.5 is a coin flip; 1.0 is perfect.
+- **Missing number found**: the share of true matches where one side has no house number (164 pairs, part of the non-identical matches). This is the group where the models differ most.
+- **AUC, non-identical vs look-alike**: how well a model tells real but differently written matches from look-alike streets, independent of the threshold.
 
-AUC is needed because two models can look different at 0.5 only because their scores are shifted, while ranking the pairs equally well.
+<table>
+<tr><th>Model</th><th>Identical found</th><th>Non-identical found</th><th class="key">Missing number found</th><th>Different number rejected</th><th>Look-alike street rejected</th><th>Random rejected</th><th class="key">AUC, non-identical vs look-alike</th></tr>
+<tr><td>Logistic regression</td><td>99.8</td><td>60.1</td><td class="key">76.2</td><td>99.9</td><td>77.7</td><td>100.0</td><td class="key">0.776</td></tr>
+<tr><td>Random forest</td><td>100.0</td><td>84.0</td><td class="key">96.3</td><td>100.0</td><td>88.4</td><td>99.9</td><td class="key">0.924</td></tr>
+<tr class="hl"><td>XGBoost</td><td>100.0</td><td>83.6</td><td class="key">94.5</td><td>100.0</td><td>87.0</td><td>99.9</td><td class="key">0.920</td></tr>
+<tr><td>Siamese BiLSTM</td><td>100</td><td>87.0–89.3</td><td class="key">69.5–75.6</td><td>99.9–100.0</td><td>69.8–73.1</td><td>99.5–99.8</td><td class="key">0.878–0.893</td></tr>
+<tr><td>ESIM (fastText)</td><td>100</td><td>87.3–90.3</td><td class="key">71.3–75.6</td><td>98.1–99.0</td><td>73.5–80.4</td><td>99.8–99.9</td><td class="key">0.861–0.890</td></tr>
+<tr><td>DistilBERT bi-encoder</td><td>100</td><td>89.0–90.9</td><td class="key">69.5–72.6</td><td>99.8–99.9</td><td>57.6–68.8</td><td>99.8–99.9</td><td class="key">0.883–0.893</td></tr>
+<tr class="hl"><td>DistilBERT cross-encoder</td><td>100</td><td>80.3–83.0</td><td class="key">63.4–66.5</td><td>99.9–100</td><td>86.1–88.8</td><td>99.9</td><td class="key">0.888–0.904</td></tr>
+</table>
 
-{{chart:auc_overall}}
+*Test set. Neural models: min–max over three seeds. Highlighted: XGBoost and the DistilBERT cross-encoder.*
 
 ## What I found
 
 **1. All models handle the easy pairs.** On identical matches, different-number pairs and random pairs, every model gets about 98–100% right. Overall accuracy would make the models look nearly identical.
 
-**2. Missing house numbers are where the models differ most.** When one side of a true match has no house number (`641 SCOFIELDTOWN RD` / `SCOFIELDTOWN RD`), the tree models find 94–96% of these matches, more than of non-identical matches overall. The neural models find 63–76% of them, about 15 points below their overall rate:
+**2. Missing house numbers are where the models differ most.** When one side of a true match has no house number (`641 SCOFIELDTOWN RD` / `SCOFIELDTOWN RD`), the neural models find only 63–76% of these matches, about 15 points below their rate on non-identical matches overall. The tree models don't follow this pattern: they find 94–96% of them, more than of non-identical matches overall.
+
+The likely reason is that the tree models get the house number segmented ahead of time: they compare it as its own field, marked "not comparable" when one side has none, which makes this comparison simple. The neural models get no such segmentation; they see only a string with a number missing. The marking matters: with the missing number read as `0` instead, XGBoost finds only 20% of these matches.
 
 {{chart:missing_found}}
 
-The likely reason is that the classical models get the house number as its own field, marked "not comparable" when one side has none. Without that marking, the trees lose most of these matches: XGBoost with the missing number read as `0` finds 20% of them, against 94% with the −1 marking. The neural models see only a string with a number missing.
+**3. On look-alike streets the neural models are level with the trees.** With the missing-number matches set aside, every neural model ranks matches against look-alike streets about as well as XGBoost or better (AUC 0.89–0.94 against 0.91). XGBoost's overall lead comes from the 164 missing-number matches.
 
-**3. On look-alike streets the neural models are level with the trees.** The chart splits the true matches by what happened to the house number, and shows how well each model ranks them above the look-alike streets:
+{{chart:auc_without_missing}}
 
-{{chart:auc_groups}}
+**4. The bi- and cross-encoder rank the hard pairs equally; the cross-encoder separates them more cleanly.** Their AUCs overlap (0.883–0.893 and 0.888–0.904); as in the results table, this is the AUC of non-identical matches against look-alike streets, so both rank these two pair types about equally well. The difference is in how their scores are spread. The cross-encoder scores most pairs close to 0 or 1, so almost any threshold works for it. The bi-encoder scores many look-alike streets just below the true matches, so it only separates the two near a threshold of 0.99. At the default 0.5 this makes them look very different: the bi-encoder finds 89–91% of the non-identical matches but rejects only 58–69% of the look-alike streets, while the cross-encoder finds 80–83% and rejects 86–89%.
 
-- When **both sides have the same house number**, every model is at 0.90–0.93.
-- When the house number is **missing from one side**, XGBoost is at 0.96 and the neural models at 0.69–0.81.
-- The group with **two different house numbers** on a true match has only 41 pairs; here the neural models are ahead of XGBoost.
+{{chart:youden_curves}}
 
-So the neural models aren't worse at streets: setting the missing-number matches aside, every one of them ranks matches against look-alike streets about as well as XGBoost or better. XGBoost's overall lead comes from the group of 164 pairs.
+**5. Cross-attention brought no clear gain in ranking.** Two pairs of models differ mainly in whether the two addresses attend to each other: the cross-encoder against the bi-encoder, and ESIM against the siamese BiLSTM. In both pairs the AUCs overlap:
 
-**4. The 0.5 threshold is misleading on its own.** The DistilBERT bi-encoder finds 89–91% of the non-identical matches but rejects only 58–69% of the look-alike streets. The cross-encoder is the opposite: 80–83% found, 86–89% rejected. Their AUCs overlap (0.883–0.893 and 0.888–0.904), so they rank the hard pairs about equally well. The difference is in how their scores are spread: the cross-encoder scores most pairs close to 0 or 1, so almost any threshold works for it, while the bi-encoder only separates matches from look-alike streets with a threshold near 0.99.
+| Pair | Without cross-attention | With cross-attention |
+|---|---|---|
+| DistilBERT | Bi-encoder: 0.883–0.893 | Cross-encoder: 0.888–0.904 |
+| BiLSTM | Siamese BiLSTM: 0.878–0.893 | ESIM: 0.861–0.890 |
 
-**5. Cross-attention brought no clear gain in ranking.** Two pairs of models differ mainly in whether the two addresses attend to each other: the cross-encoder against the bi-encoder, and ESIM against the siamese BiLSTM. In both pairs the AUCs overlap. The DistilBERT pair is the cleaner test, since ESIM also reads words where the siamese model reads characters.
+*AUC of non-identical matches against look-alike streets, test set, min–max over three seeds.*
 
-## ESIM and rare house numbers
-
-ESIM, following the original paper, uses word2vec vectors, which only cover words seen at least twice. Every other word becomes one shared "unknown" token. When both house numbers of a same-street pair are seen only once, `2147 SUMMER ST` / `1867 SUMMER ST` becomes the same input as `2147 SUMMER ST` / `2147 SUMMER ST`, with the opposite label. Each training run picked one answer for the whole group.
-
-Giving every word its own word2vec vector did not fix it: word2vec builds a number's vector from the words around it, so two numbers on the same street end up with nearly the same vector. Two settings did fix it: fastText, which builds each word's vector from its character pieces, and a fixed random vector for each rare word. I kept fastText, which ranks non-identical matches against look-alike streets better on validation. Characters (siamese) and sub-word pieces (DistilBERT) never had this problem.
-
-## Correction to an earlier version
-
-An earlier version of this post and the paper had a data error. When building the different-number pairs, I checked that both places had a house number using their Overture addresses, but one side of the pair uses the Foursquare address, which sometimes leaves the number off. So about 2% of the different-number pairs looked like `74 BEACH RD` / `BEACH RD`, the same pattern as some true matches, with the opposite label. I fixed the check, rebuilt the pairs and retrained every model; all numbers here come from the corrected data. The fix mainly changed the matches with a missing number, which every model now finds far more often. [Appendix B of the paper](https://github.com/DZhang3210/address-matching-by-pair-type/blob/main/paper/address-matching-by-pair-type.pdf) describes the error and what it changed.
+The DistilBERT pair is the cleaner test, since ESIM also reads words where the siamese model reads characters.
 
 ## What I'd do next
 
@@ -117,3 +115,34 @@ Scoring by pair type is what showed this. A single overall number would say the 
 - **Code:** [github.com/DZhang3210/address-matching-by-pair-type](https://github.com/DZhang3210/address-matching-by-pair-type), including a notebook that reproduces every table
 - **Trained models:** [huggingface.co/zhangdav/address-matching-by-pair-type](https://huggingface.co/zhangdav/address-matching-by-pair-type)
 - **Dataset:** [huggingface.co/datasets/zhangdav/address-matching-by-pair-type](https://huggingface.co/datasets/zhangdav/address-matching-by-pair-type)
+
+## Addendum: ESIM and rare house numbers
+
+A detail from building ESIM, not needed for the results above.
+
+**The problem.** ESIM, following the original paper, uses word2vec vectors, which only cover words seen at least twice (`min_count` 2). Every other word becomes one shared "unknown" token. When both house numbers of a same-street pair are seen only once, `2147 SUMMER ST` / `1867 SUMMER ST` becomes `UNK SUMMER ST` / `UNK SUMMER ST`: the same input as the identical match `2147 SUMMER ST` / `2147 SUMMER ST`, with the opposite label. The model can't tell the two apart, so each training run picks one answer for the whole group. All three seeds settled on "non-match", finding at most 22% of the group's identical matches. The group is small, about 0.6% of validation pairs, but telling two house numbers apart is the minimum a matcher should do.
+
+**First attempt: every word gets a vector (`min_count` 1).** This removes the shared unknown token, but it did not fix the problem. word2vec builds a number's vector from the words around it, not from its digits. Two numbers on the same street appear next to the same words, so their vectors end up nearly the same (cosine 0.93, against 0.57 for random pairs of numbers), and the model still can't tell `2147` from `1867`.
+
+**Three more settings**, each changing how a rare number is embedded:
+
+- **fastText** (`min_count` 1) builds each word's vector from its character pieces, so a number's vector comes from its digits.
+- **A random vector per rare word**: each word word2vec drops gets its own fixed random vector instead of the shared unknown token. Two different numbers get unrelated vectors.
+- **Stacked**: each word's word2vec and fastText vectors side by side.
+
+**Results on the rare-number group.** fastText and the random vector both fix the group: on every seed they find every identical match, reject over 90% of the different-number pairs, and rank the two perfectly (AUC 1.00). Stacking also ranks the group perfectly and finds every match, but rejects only 75–88% of the different-number pairs.
+
+**fastText, the kept setting.** Of the two that fix the group, each is better at one thing. The random vector rejects slightly more of the group's different-number pairs (94–96% against 91–94%), while fastText ranks non-identical matches against look-alike streets better (AUC 0.87–0.90 against 0.85–0.88). The random vector's edge is narrow by design: unrelated vectors are exactly the right signal for two unknown house numbers, but it gives every rare word an unrelated vector, so a rare spelling of a street in a true match also looks like a different street. fastText builds its vectors from character pieces, so it reads the numbers and keeps spelling variants close.
+
+Characters (siamese) and sub-word pieces (DistilBERT) never had this problem.
+
+<table>
+<tr><th>Setting</th><th>Rare-number matches found</th><th class="key">Rare-number non-matches rejected</th><th>Rare-number AUC</th><th class="key">AUC, non-identical vs look-alike</th></tr>
+<tr><td>word2vec, <code>min_count</code> 2</td><td>1–22%</td><td class="key">95–100%</td><td>0.663–0.720</td><td class="key">0.899–0.909</td></tr>
+<tr><td>word2vec, <code>min_count</code> 1</td><td>40–78%</td><td class="key">68–83%</td><td>0.678–0.845</td><td class="key">0.854–0.900</td></tr>
+<tr class="hl"><td>fastText</td><td>100%</td><td class="key">91–94%</td><td>1.000</td><td class="key">0.867–0.902</td></tr>
+<tr class="hl"><td>Random vector per rare word</td><td>100%</td><td class="key">94–96%</td><td>1.000</td><td class="key">0.847–0.877</td></tr>
+<tr><td>Stacked</td><td>100%</td><td class="key">75–88%</td><td>1.000</td><td class="key">0.898–0.916</td></tr>
+</table>
+
+*Validation set, min–max over three seeds. Highlighted: the two settings that fix the rare-number group. Shaded: the two columns they trade off on.*

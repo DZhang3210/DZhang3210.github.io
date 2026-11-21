@@ -104,3 +104,8 @@ figure > figcaption, .chart figcaption { font: 14px/1.5 system-ui, sans-serif; c
 .chart .svg-scroll { overflow-x: auto; }
 @media (max-width: 560px) { .chart svg { min-width: 480px; } }
 .meta-link { font: 15px system-ui, sans-serif; margin: -20px 0 28px; }
+tr.hl td { background: var(--surface-2); font-weight: 600; }
+th.key, td.key { background: color-mix(in srgb, var(--s1) 14%, transparent); }
+th.key { color: var(--text); }
+tr.hl td.key { background: color-mix(in srgb, var(--s1) 22%, var(--surface-2)); }
+.chart .line { fill: none; stroke-width: 1.6; stroke-linejoin: round; }
