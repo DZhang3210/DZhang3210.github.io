@@ -45,7 +45,7 @@
 
   <!-- ===== Panel 2: ESIM ===== -->
   <text class="h" x="480" y="36">(b) ESIM</text>
-  <text class="s" x="480" y="54">word2vec + BiLSTM + attention</text>
+  <text class="s" x="480" y="54">fastText + BiLSTM + attention</text>
 
   <rect class="in" x="360" y="74" width="100" height="34" rx="5"/><text class="t" x="410" y="96">Address A</text>
   <rect class="in" x="500" y="74" width="100" height="34" rx="5"/><text class="t" x="550" y="96">Address B</text>

@@ -8,21 +8,21 @@
   --rule: #e4e3df;
   --grid: #ebeae6;
   --link: #1c5cab;
-  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100;
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100; --s5: #8a5cd1;
 }
 @media (prefers-color-scheme: dark) {
   :root:where(:not([data-theme="light"])) {
     color-scheme: dark;
     --bg: #1a1a19; --surface-2: #242422; --text: #f0efec; --text-2: #c3c2b7; --muted: #8f8e88;
     --rule: #33332f; --grid: #2c2c29; --link: #86b6ef;
-    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500;
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #9b72e0;
   }
 }
 :root[data-theme="dark"] {
   color-scheme: dark;
   --bg: #1a1a19; --surface-2: #242422; --text: #f0efec; --text-2: #c3c2b7; --muted: #8f8e88;
   --rule: #33332f; --grid: #2c2c29; --link: #86b6ef;
-  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500;
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #9b72e0;
 }
 
 * { box-sizing: border-box; }
@@ -85,10 +85,11 @@ figure > figcaption, .chart figcaption { font: 14px/1.5 system-ui, sans-serif; c
 .chart .mark:hover .range { opacity: 0.75; }
 .s1 { stroke: var(--s1); fill: var(--s1); } .s2 { stroke: var(--s2); fill: var(--s2); }
 .s3 { stroke: var(--s3); fill: var(--s3); } .s4 { stroke: var(--s4); fill: var(--s4); }
+.s5 { stroke: var(--s5); fill: var(--s5); }
 .chart .bar { stroke: none; }
 .legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font: 13px system-ui, sans-serif; color: var(--text-2); margin: 0 0 8px; }
 .legend i.s1 { background: var(--s1); } .legend i.s2 { background: var(--s2); }
-.legend i.s3 { background: var(--s3); } .legend i.s4 { background: var(--s4); }
+.legend i.s3 { background: var(--s3); } .legend i.s4 { background: var(--s4); } .legend i.s5 { background: var(--s5); }
 .legend i.sw { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: -1px; }
 .table-view { font: 14px system-ui, sans-serif; color: var(--text-2); margin-top: 6px; }
 .table-view summary { cursor: pointer; }
@@ -102,3 +103,4 @@ figure > figcaption, .chart figcaption { font: 14px/1.5 system-ui, sans-serif; c
 }
 .chart .svg-scroll { overflow-x: auto; }
 @media (max-width: 560px) { .chart svg { min-width: 480px; } }
+.meta-link { font: 15px system-ui, sans-serif; margin: -20px 0 28px; }
