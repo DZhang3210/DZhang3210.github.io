@@ -7,7 +7,7 @@ draft: false
 
 <p class="meta-link"><a href="https://github.com/DZhang3210/address-matching-by-pair-type/blob/main/paper/address-matching-by-pair-type.pdf">Full write-up (PDF)</a> · <a href="https://github.com/DZhang3210/address-matching-by-pair-type">Code</a></p>
 
-There are many address-matching models, from string-similarity rules to deep learning, but each is evaluated on its own data, so they can't be compared directly. This post runs seven of them on one shared dataset of real address pairs and reports where they differ.
+Address matching has historically lacked a common benchmark: methods ranging from string-similarity rules to deep learning have each been evaluated on their own data, making direct comparison difficult. In this post, we evaluate seven such methods on a single shared dataset of real address pairs and compare their performance against one another.
 
 ## The data
 
