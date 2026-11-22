@@ -11,9 +11,11 @@
 <header class="site"><div class="wrap"><a class="name" href="../../">David Zhang</a>
 <nav><a href="../../">Writing</a><a href="https://github.com/DZhang3210">GitHub</a></nav></div></header>
 <main><div class="wrap">
-<article><h1>Comparing address-matching models on a unified dataset</h1><div class="meta">November 2026 · 9 min read</div><p class="meta-link"><a href="https://github.com/DZhang3210/address-matching-by-pair-type/blob/main/paper/address-matching-by-pair-type.pdf">Full write-up (PDF)</a> · <a href="https://github.com/DZhang3210/address-matching-by-pair-type">Code</a></p>
+<article><h1>Comparing address-matching models on a unified dataset</h1><div class="meta">November 2026 · 9 min read</div><p class="meta-link"><a href="https://github.com/DZhang3210/address-matching-by-pair-type/blob/main/paper/address-matching-by-pair-type.pdf">Full write-up (PDF)</a> · <a href="https://github.com/DZhang3210/address-matching-by-pair-type">Code</a> · <a href="https://addressmatcher.vercel.app">Play the game</a></p>
 
 <p>Address matching has historically lacked a common benchmark: methods ranging from string-similarity rules to deep learning have each been evaluated on their own data, making direct comparison difficult. In this post, we evaluate seven such methods on a single shared dataset of real address pairs and compare their performance against one another.</p>
+<div class="callout"><p><strong>Try it yourself first.</strong> <a href="https://addressmatcher.vercel.app"><em>Same Place?</em></a> is a short game built on the pairs from this study: you see two address records from two map datasets and decide whether they are the same place. You can play against one of the models, and the pairs it struggles with, the ones this post is about, are worth the most points.</p></div>
+
 <h2>The data</h2>
 <p>I used two open datasets, <a href="https://overturemaps.org/">Overture Maps</a> and <a href="https://opensource.foursquare.com/os-places/">Foursquare Open Source Places</a>. Overture&rsquo;s bridge files link each Overture place to its Foursquare record, which gives pairs of addresses for the same place written by two different sources (Connecticut only).</p>
 <figure><img src="../../assets/figures/data-pipeline.svg" alt="Data pipeline: two open datasets, linked with Overture's bridge files, cleaned, split by ZIP code, doubtful pairs set aside, duplicates removed, then non-matches added at 1:9"><figcaption>How the dataset is built. Details of each step are in the <a href="https://github.com/DZhang3210/address-matching-by-pair-type/blob/main/paper/address-matching-by-pair-type.pdf">full write-up</a>.</figcaption></figure>
@@ -389,6 +391,7 @@
 <li><strong>Code:</strong> <a href="https://github.com/DZhang3210/address-matching-by-pair-type">github.com/DZhang3210/address-matching-by-pair-type</a>, including a notebook that reproduces every table</li>
 <li><strong>Trained models:</strong> <a href="https://huggingface.co/zhangdav/address-matching-by-pair-type">huggingface.co/zhangdav/address-matching-by-pair-type</a></li>
 <li><strong>Dataset:</strong> <a href="https://huggingface.co/datasets/zhangdav/address-matching-by-pair-type">huggingface.co/datasets/zhangdav/address-matching-by-pair-type</a></li>
+<li><strong>Game:</strong> <a href="https://addressmatcher.vercel.app"><em>Same Place?</em></a>, match addresses against the models from this post</li>
 </ul>
 <h2>Addendum: ESIM and rare house numbers</h2>
 <p>A detail from building ESIM, not needed for the results above.</p>

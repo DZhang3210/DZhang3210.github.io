@@ -5,9 +5,11 @@ description: Tree models and four neural networks, run on the same real address 
 draft: false
 ---
 
-<p class="meta-link"><a href="https://github.com/DZhang3210/address-matching-by-pair-type/blob/main/paper/address-matching-by-pair-type.pdf">Full write-up (PDF)</a> · <a href="https://github.com/DZhang3210/address-matching-by-pair-type">Code</a></p>
+<p class="meta-link"><a href="https://github.com/DZhang3210/address-matching-by-pair-type/blob/main/paper/address-matching-by-pair-type.pdf">Full write-up (PDF)</a> · <a href="https://github.com/DZhang3210/address-matching-by-pair-type">Code</a> · <a href="https://addressmatcher.vercel.app">Play the game</a></p>
 
 Address matching has historically lacked a common benchmark: methods ranging from string-similarity rules to deep learning have each been evaluated on their own data, making direct comparison difficult. In this post, we evaluate seven such methods on a single shared dataset of real address pairs and compare their performance against one another.
+
+<div class="callout"><p><strong>Try it yourself first.</strong> <a href="https://addressmatcher.vercel.app"><em>Same Place?</em></a> is a short game built on the pairs from this study: you see two address records from two map datasets and decide whether they are the same place. You can play against one of the models, and the pairs it struggles with, the ones this post is about, are worth the most points.</p></div>
 
 ## The data
 
@@ -115,6 +117,7 @@ Scoring by pair type is what showed this. A single overall number would say the 
 - **Code:** [github.com/DZhang3210/address-matching-by-pair-type](https://github.com/DZhang3210/address-matching-by-pair-type), including a notebook that reproduces every table
 - **Trained models:** [huggingface.co/zhangdav/address-matching-by-pair-type](https://huggingface.co/zhangdav/address-matching-by-pair-type)
 - **Dataset:** [huggingface.co/datasets/zhangdav/address-matching-by-pair-type](https://huggingface.co/datasets/zhangdav/address-matching-by-pair-type)
+- **Game:** [*Same Place?*](https://addressmatcher.vercel.app), match addresses against the models from this post
 
 ## Addendum: ESIM and rare house numbers
 
